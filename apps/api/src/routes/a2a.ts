@@ -24,12 +24,18 @@ import { verifyApiKey } from '../utils/crypto.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Derive the public base URL from the incoming request. */
+function getBaseUrl(c: any): string {
+  const url = new URL(c.req.url);
+  return `${url.protocol}//${url.host}`;
+}
+
 // =============================================================================
 // Shared Helpers
 // =============================================================================
 
 /** Fetch agent + account + wallet and generate an A2A Agent Card. */
-async function fetchAgentCard(agentId: string, tenantId?: string) {
+async function fetchAgentCard(agentId: string, tenantId?: string, baseUrl?: string) {
   const supabase = createClient();
 
   let query = supabase
@@ -61,6 +67,7 @@ async function fetchAgentCard(agentId: string, tenantId?: string) {
     agent as any,
     account || { id: agent.parent_account_id, name: 'Unknown' },
     wallet,
+    baseUrl,
   );
 
   return { card };
@@ -106,7 +113,7 @@ a2aPublicRouter.get('/agents/:agentId/card', async (c) => {
   const agentId = c.req.param('agentId');
   if (!UUID_RE.test(agentId)) return c.json({ error: 'Invalid agent ID format' }, 400);
 
-  const result = await fetchAgentCard(agentId);
+  const result = await fetchAgentCard(agentId, undefined, getBaseUrl(c));
   if ('error' in result) return c.json({ error: result.error }, result.status);
   return agentCardResponse(result.card);
 });
@@ -125,7 +132,7 @@ a2aPublicRouter.get('/:agentId/.well-known/agent.json', async (c) => {
   const agentId = c.req.param('agentId');
   if (!UUID_RE.test(agentId)) return c.json({ error: 'Invalid agent ID format' }, 400);
 
-  const result = await fetchAgentCard(agentId);
+  const result = await fetchAgentCard(agentId, undefined, getBaseUrl(c));
   if ('error' in result) return c.json({ error: result.error }, result.status);
   return agentCardResponse(result.card);
 });
@@ -539,7 +546,7 @@ a2aRouter.get('/agents/:agentId/card', async (c) => {
   const agentId = c.req.param('agentId');
   if (!UUID_RE.test(agentId)) return c.json({ error: 'Invalid agent ID format' }, 400);
 
-  const result = await fetchAgentCard(agentId, ctx.tenantId);
+  const result = await fetchAgentCard(agentId, ctx.tenantId, getBaseUrl(c));
   if ('error' in result) return c.json({ error: result.error }, result.status);
   return c.json({ data: result.card });
 });

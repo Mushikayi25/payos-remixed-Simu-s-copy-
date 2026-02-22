@@ -45,7 +45,8 @@ const VALID_SETTLEMENT_RAILS = [
  */
 ap2.get('/agent-card', async (c) => {
   const { generatePlatformCard } = await import('../services/a2a/agent-card.js');
-  const card = generatePlatformCard();
+  const url = new URL(c.req.url);
+  const card = generatePlatformCard(`${url.protocol}//${url.host}`);
   return c.json({ data: card });
 });
 

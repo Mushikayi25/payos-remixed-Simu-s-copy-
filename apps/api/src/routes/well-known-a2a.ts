@@ -44,7 +44,8 @@ router.options('/', (c) => {
  * Cache-Control: 1 hour (cards change infrequently).
  */
 router.get('/', async (c) => {
-  const card = generatePlatformCard();
+  const url = new URL(c.req.url);
+  const card = generatePlatformCard(`${url.protocol}//${url.host}`);
 
   // Return raw card without response wrapper — A2A spec requires
   // the agent card at the root level.

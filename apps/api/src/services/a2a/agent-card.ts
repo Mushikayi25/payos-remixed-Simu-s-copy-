@@ -9,7 +9,10 @@
 
 import type { A2AAgentCard, A2ASkill, A2AExtension } from './types.js';
 
-const BASE_URL = process.env.API_BASE_URL || 'http://localhost:4000';
+/** Derive base URL from the request or fall back to env / localhost. */
+function resolveBaseUrl(baseUrl?: string): string {
+  return baseUrl || process.env.API_BASE_URL || 'http://localhost:4000';
+}
 
 interface AgentRecord {
   id: string;
@@ -37,9 +40,11 @@ export function generateAgentCard(
   agent: AgentRecord,
   account: AccountRecord,
   wallet?: WalletRecord | null,
+  baseUrl?: string,
 ): A2AAgentCard {
+  const BASE_URL = resolveBaseUrl(baseUrl);
   const skills = buildSkills(agent);
-  const extensions = buildExtensions(agent, wallet);
+  const extensions = buildExtensions(agent, wallet, BASE_URL);
   const endpointUrl = `${BASE_URL}/a2a/${agent.id}`;
 
   return {
@@ -91,7 +96,8 @@ export function generateAgentCard(
 /**
  * Generate the Sly platform Agent Card (for /.well-known/agent.json).
  */
-export function generatePlatformCard(): A2AAgentCard {
+export function generatePlatformCard(baseUrl?: string): A2AAgentCard {
+  const BASE_URL = resolveBaseUrl(baseUrl);
   const endpointUrl = `${BASE_URL}/a2a`;
 
   return {
@@ -315,6 +321,7 @@ function buildSkills(agent: AgentRecord): A2ASkill[] {
 function buildExtensions(
   agent: AgentRecord,
   wallet?: WalletRecord | null,
+  BASE_URL?: string,
 ): A2AExtension[] {
   const extensions: A2AExtension[] = [];
 
