@@ -103,6 +103,13 @@ export class A2ATaskProcessor {
     const task = await this.taskService.getTask(taskId);
     if (!task) return null;
 
+    // Don't reprocess tasks that are already in a terminal state
+    const terminalStates = ['completed', 'failed', 'canceled', 'rejected'];
+    if (terminalStates.includes(task.status.state)) {
+      console.log(`[A2A Processor] Skipping task ${taskId.slice(0, 8)} — already in '${task.status.state}' state`);
+      return task;
+    }
+
     console.log(`[A2A Processor] Processing task ${taskId.slice(0, 8)}... (${task.history.length} messages)`);
 
     // Build agent context from DB
@@ -1041,6 +1048,7 @@ export class A2ATaskProcessor {
         .single();
 
       if (transferError || !transfer) {
+        console.error(`[A2A Processor] x402 transfer creation failed:`, transferError?.message, transferError?.details, transferError?.code);
         // Rollback wallet deduction
         const { data: currentWallet } = await this.supabase
           .from('wallets')
