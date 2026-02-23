@@ -345,8 +345,19 @@ export class A2ATaskProcessor {
     providerAgentId: string,
     amount: number,
     currency: string,
-  ): Promise<{ mandateId: string } | null> {
-    // 1. Check caller's wallet has enough balance (read-only check)
+  ): Promise<{ mandateId: string } | { error: 'kya_required' | 'insufficient_funds' } | null> {
+    // 1. Look up caller agent — check KYA tier before anything else
+    const { data: callerAgent } = await this.supabase
+      .from('agents')
+      .select('parent_account_id, name, kya_tier')
+      .eq('id', callerAgentId)
+      .single();
+
+    if (!callerAgent || (callerAgent.kya_tier ?? 0) < 1) {
+      return { error: 'kya_required' };
+    }
+
+    // 2. Check caller's wallet has enough balance (read-only check)
     const { data: callerWallet } = await this.supabase
       .from('wallets')
       .select('id, balance')
@@ -354,14 +365,9 @@ export class A2ATaskProcessor {
       .eq('tenant_id', this.tenantId)
       .maybeSingle();
 
-    if (!callerWallet || Number(callerWallet.balance) < amount) return null;
-
-    // 2. Look up caller and provider agents for account linkage
-    const { data: callerAgent } = await this.supabase
-      .from('agents')
-      .select('parent_account_id, name')
-      .eq('id', callerAgentId)
-      .single();
+    if (!callerWallet || Number(callerWallet.balance) < amount) {
+      return { error: 'insufficient_funds' };
+    }
 
     const { data: providerAgent } = await this.supabase
       .from('agents')
@@ -593,29 +599,35 @@ export class A2ATaskProcessor {
     let settlementMandateId: string | undefined;
 
     if (callerAgentId && Number(skill.base_price) > 0) {
-      const mandate = await this.createSettlementMandate(
+      const mandateResult = await this.createSettlementMandate(
         taskId,
         callerAgentId,
         agentCtx.agentId,
         Number(skill.base_price),
         skill.currency,
       );
-      if (!mandate) {
-        await this.taskService.addMessage(taskId, 'agent', [
-          { text: `This skill costs ${skill.base_price} ${skill.currency}. Insufficient funds in caller wallet.` },
-        ]);
+      if (!mandateResult || 'error' in mandateResult) {
+        if (mandateResult && mandateResult.error === 'kya_required') {
+          await this.taskService.addMessage(taskId, 'agent', [
+            { text: `Caller agent must be KYA verified (tier >= 1) to pay for skills. Use verify_agent to upgrade.` },
+          ]);
+        } else {
+          await this.taskService.addMessage(taskId, 'agent', [
+            { text: `This skill costs ${skill.base_price} ${skill.currency}. Insufficient funds in caller wallet.` },
+          ]);
+        }
         await this.taskService.updateTaskState(taskId, 'input-required', 'Payment required');
         return this.taskService.getTask(taskId);
       }
-      settlementMandateId = mandate.mandateId;
+      settlementMandateId = mandateResult.mandateId;
       // Store mandate ID in task metadata for resolution later
       await this.supabase
         .from('a2a_tasks')
         .update({
-          metadata: { ...(taskRow as any)?.metadata, settlementMandateId: mandate.mandateId },
+          metadata: { ...(taskRow as any)?.metadata, settlementMandateId: mandateResult.mandateId },
         })
         .eq('id', taskId);
-      console.log(`[A2A Processor] Settlement mandate created: ${mandate.mandateId} for task ${taskId.slice(0, 8)}`);
+      console.log(`[A2A Processor] Settlement mandate created: ${mandateResult.mandateId} for task ${taskId.slice(0, 8)}`);
     }
 
     // Charge service fee if applicable (self-deduction for platform fees — separate from settlement)
