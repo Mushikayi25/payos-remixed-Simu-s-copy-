@@ -21,7 +21,7 @@ const mockMode = process.env.MOCK_SCHEDULED_TRANSFERS === 'true' || process.env.
 const enableWebhookCleanup = process.env.ENABLE_WEBHOOK_CLEANUP !== 'false'; // Enabled by default
 const enableSettlementWindows = process.env.ENABLE_SETTLEMENT_WINDOWS !== 'false'; // Enabled by default
 const enableTreasuryWorker = process.env.ENABLE_TREASURY_WORKER !== 'false'; // Enabled by default
-const enableA2AWorker = process.env.ENABLE_A2A_WORKER === 'true';
+const enableA2AWorker = process.env.ENABLE_A2A_WORKER !== 'false'; // Enabled by default
 
 console.log(`
 ╔══════════════════════════════════════════════════╗
