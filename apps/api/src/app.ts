@@ -223,29 +223,6 @@ app.route('/.well-known/agent.json', wellKnownA2aRouter);
 // Epic 57: Google A2A Protocol Integration
 app.route('/a2a', a2aPublicRouter);
 
-// x402 Test Shim (public - returns 402 challenge or 200 on paid retry)
-app.post('/x402-test-shim', async (c) => {
-  const xPayment = c.req.header('X-Payment');
-  if (xPayment) {
-    // Paid retry — return success
-    const body = await c.req.json().catch(() => ({}));
-    const text = body?.params?.message?.parts?.[0]?.text || 'unknown request';
-    return c.json({
-      response: `[x402 test shim] Paid request received. Analysis of "${text}": This is a mock response confirming the x402 payment flow works end-to-end.`,
-    });
-  }
-  // First request — return 402 challenge (0.10 USDC = 100000 base units)
-  return c.json({
-    accepts: [{
-      scheme: 'exact-evm',
-      network: 'eip155:84532',
-      amount: '100000',
-      token: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
-      description: 'x402 test shim — 0.10 USDC',
-    }],
-  }, 402);
-});
-
 // UCP Schemas (public - for capability discovery)
 // Story 43.2: UCP Capability Definitions
 app.route('/ucp', ucpSchemasRouter);
