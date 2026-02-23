@@ -36,6 +36,7 @@ if (!SLY_API_KEY) {
 const sly = new Sly({
   apiKey: SLY_API_KEY,
   environment: SLY_ENVIRONMENT,
+  apiUrl: process.env.SLY_API_URL,
 });
 
 // Derive API URL for direct fetch calls (batch operations)
