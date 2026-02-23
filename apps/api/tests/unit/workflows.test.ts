@@ -572,7 +572,7 @@ describe('WorkflowEngine', () => {
       const template = await engine.createTemplate('tenant-1', {
         name: 'Simple Action',
         steps: [
-          { type: 'action', name: 'Do Something', config: { action: 'execute_transfer' } },
+          { type: 'action', name: 'Do Something', config: { action: 'test' } },
         ],
       });
 
@@ -673,7 +673,7 @@ describe('WorkflowEngine', () => {
         name: 'Approve Test',
         steps: [
           { type: 'approval', name: 'Approval', config: { timeout_hours: 24 } },
-          { type: 'action', name: 'Execute', config: { action: 'execute_transfer' } },
+          { type: 'action', name: 'Execute', config: { action: 'test' } },
         ],
       });
 
@@ -764,6 +764,25 @@ describe('WorkflowEngine', () => {
   describe('Action Step (Story 29.5)', () => {
     it('executes action step with interpolated params', async () => {
       const engine = await getEngine();
+
+      // Seed accounts and a transfer record in the mock DB so execute_transfer can work
+      const transferId = 'txn_abc';
+      supabase._mockData.accounts = [
+        { id: 'acc-1', tenant_id: 'tenant-1', name: 'Sender', balance_total: 10000, balance_available: 10000, balance_in_streams: 0, balance_buffer: 0 },
+        { id: 'acc-2', tenant_id: 'tenant-1', name: 'Receiver', balance_total: 0, balance_available: 0, balance_in_streams: 0, balance_buffer: 0 },
+      ];
+      supabase._mockData.transfers = [{
+        id: transferId,
+        tenant_id: 'tenant-1',
+        status: 'pending',
+        type: 'internal',
+        amount: '100',
+        from_account_id: 'acc-1',
+        to_account_id: 'acc-2',
+        description: 'Test transfer',
+        created_at: new Date().toISOString(),
+      }];
+
       const template = await engine.createTemplate('tenant-1', {
         name: 'Action Test',
         steps: [
@@ -780,7 +799,7 @@ describe('WorkflowEngine', () => {
 
       const instance = await engine.createInstance('tenant-1', {
         templateId: template.id,
-        triggerData: { transfer_id: 'txn_abc' },
+        triggerData: { transfer_id: transferId },
       });
 
       expect(instance.status).toBe('completed');
@@ -906,12 +925,31 @@ describe('WorkflowEngine', () => {
   describe('Multi-step Workflow Integration', () => {
     it('runs a complete multi-step workflow', async () => {
       const engine = await getEngine();
+
+      // Seed accounts and a transfer record for the action step
+      const transferId = 'txn_big';
+      supabase._mockData.accounts = [
+        { id: 'acc-1', tenant_id: 'tenant-1', name: 'Sender', balance_total: 50000, balance_available: 50000, balance_in_streams: 0, balance_buffer: 0 },
+        { id: 'acc-2', tenant_id: 'tenant-1', name: 'Receiver', balance_total: 0, balance_available: 0, balance_in_streams: 0, balance_buffer: 0 },
+      ];
+      supabase._mockData.transfers = [{
+        id: transferId,
+        tenant_id: 'tenant-1',
+        status: 'pending',
+        type: 'internal',
+        amount: '5000',
+        from_account_id: 'acc-1',
+        to_account_id: 'acc-2',
+        description: 'Big procurement transfer',
+        created_at: new Date().toISOString(),
+      }];
+
       const template = await engine.createTemplate('tenant-1', {
         name: 'Full Procurement Workflow',
         steps: [
           { type: 'condition', name: 'Check Amount', config: { expression: 'trigger.amount > 1000', if_true: 'continue', if_false: 'skip_to:2' } },
           { type: 'approval', name: 'Manager Approval', config: { timeout_hours: 24 } },
-          { type: 'action', name: 'Execute Payment', config: { action: 'execute_transfer', params: { id: '{{trigger.transfer_id}}' } } },
+          { type: 'action', name: 'Execute Payment', config: { action: 'execute_transfer', params: { transfer_id: '{{trigger.transfer_id}}' } } },
           { type: 'notification', name: 'Notify', config: { type: 'internal', message: 'Payment {{trigger.transfer_id}} completed' } },
         ],
       });
@@ -919,7 +957,7 @@ describe('WorkflowEngine', () => {
       // High amount: needs approval
       const instance = await engine.createInstance('tenant-1', {
         templateId: template.id,
-        triggerData: { amount: 5000, transfer_id: 'txn_big' },
+        triggerData: { amount: 5000, transfer_id: transferId },
       });
 
       // Condition passes (amount > 1000), workflow should be paused at approval

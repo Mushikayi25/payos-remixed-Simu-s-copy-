@@ -11,12 +11,11 @@ import crypto from 'crypto';
 const API_URL = process.env.API_URL || 'http://localhost:4000';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const skipIntegration = !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables');
-}
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+const supabase = skipIntegration
+  ? (null as any)
+  : createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
 // Test accounts from setup.ts
 const TEST_TENANT_ID = 'aaaaaaaa-0000-0000-0000-000000000001'; // Demo Fintech
@@ -84,7 +83,7 @@ async function createTransfer(amount: string): Promise<string> {
   return execData.data.execution_result.id;
 }
 
-describe('POST /v1/simulate - Refund Simulation', () => {
+describe.skipIf(skipIntegration)('POST /v1/simulate - Refund Simulation', () => {
   it('should simulate a valid partial refund', async () => {
     // Create a transfer first
     const transferId = await createTransfer('100.00');

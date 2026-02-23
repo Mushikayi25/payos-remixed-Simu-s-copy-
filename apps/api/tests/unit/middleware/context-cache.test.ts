@@ -322,8 +322,8 @@ describe('Context Cache Middleware', () => {
       expect(res2.headers.get('X-Cache')).toBe('HIT');
       
       // Cache hit should be faster (or at least not significantly slower)
-      // Note: In unit tests the difference may be minimal
-      expect(duration2).toBeLessThanOrEqual(duration1 * 2);
+      // Note: In unit tests both durations may be sub-millisecond (rounded to 0-1ms)
+      expect(duration2).toBeLessThanOrEqual(Math.max(duration1 * 2, 5));
     });
   });
 
