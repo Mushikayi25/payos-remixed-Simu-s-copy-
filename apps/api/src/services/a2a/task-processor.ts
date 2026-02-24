@@ -970,8 +970,13 @@ export class A2ATaskProcessor {
       const callerAgentId = taskRow?.client_agent_id;
       if (!callerAgentId) {
         await this.taskService.addMessage(taskId, 'agent', [
-          { text: `x402 payment required (${humanAmount} USDC) but no caller agent found on this task.` },
-        ]);
+          { text: `x402 payment required (${humanAmount} USDC) but no caller agent found on this task. Authenticate with an agent token (agent_*) instead of an API key to associate a caller agent.` },
+        ], {
+          error_code: 'no_caller_agent',
+          required_amount: humanAmount,
+          currency: 'USDC',
+          resolution: 'authenticate_as_agent',
+        });
         await this.taskService.updateTaskState(taskId, 'input-required', 'Caller agent required for x402 payment');
         return this.taskService.getTask(taskId);
       }
@@ -985,16 +990,31 @@ export class A2ATaskProcessor {
 
       if (!callerWallet) {
         await this.taskService.addMessage(taskId, 'agent', [
-          { text: `x402 payment required (${humanAmount} USDC) but caller agent has no wallet.` },
-        ]);
+          { text: `x402 payment required (${humanAmount} USDC) but caller agent has no wallet. Create a wallet for agent ${callerAgentId} via POST /v1/wallets with managedByAgentId, then re-submit this task.` },
+        ], {
+          error_code: 'no_wallet',
+          required_amount: humanAmount,
+          agent_id: callerAgentId,
+          currency: 'USDC',
+          resolution: 'create_wallet',
+        });
         await this.taskService.updateTaskState(taskId, 'input-required', 'Caller wallet required');
         return this.taskService.getTask(taskId);
       }
 
       if (Number(callerWallet.balance) < humanAmount) {
+        const deficit = humanAmount - Number(callerWallet.balance);
         await this.taskService.addMessage(taskId, 'agent', [
-          { text: `x402 payment required: ${humanAmount} USDC. Wallet balance: ${callerWallet.balance} USDC. Insufficient funds.` },
-        ]);
+          { text: `x402 payment required: ${humanAmount} USDC. Wallet balance: ${callerWallet.balance} USDC. Shortfall: ${deficit.toFixed(6)} USDC. Fund wallet ${callerWallet.id} with at least ${deficit.toFixed(6)} USDC via POST /v1/wallets/${callerWallet.id}/deposit, then re-submit this task.` },
+        ], {
+          error_code: 'insufficient_funds',
+          required_amount: humanAmount,
+          wallet_balance: Number(callerWallet.balance),
+          deficit,
+          wallet_id: callerWallet.id,
+          currency: 'USDC',
+          resolution: 'deposit_funds',
+        });
         await this.taskService.updateTaskState(taskId, 'input-required', 'Insufficient funds for x402 payment');
         return this.taskService.getTask(taskId);
       }
