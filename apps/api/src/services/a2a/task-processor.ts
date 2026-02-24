@@ -1015,6 +1015,21 @@ export class A2ATaskProcessor {
         return this.taskService.getTask(taskId);
       }
 
+      // Step 7b: Look up provider agent's wallet and credit it
+      const { data: providerWallet } = await this.supabase
+        .from('wallets')
+        .select('id, balance, owner_account_id')
+        .eq('managed_by_agent_id', agent.id)
+        .eq('tenant_id', this.tenantId)
+        .maybeSingle();
+
+      if (providerWallet) {
+        await this.supabase
+          .from('wallets')
+          .update({ balance: Number(providerWallet.balance) + humanAmount })
+          .eq('id', providerWallet.id);
+      }
+
       // Step 8: Create transfer record
       const { data: transfer, error: transferError } = await this.supabase
         .from('transfers')
@@ -1029,7 +1044,7 @@ export class A2ATaskProcessor {
           fx_rate: 1,
           fee_amount: 0,
           from_account_id: callerWallet.owner_account_id,
-          to_account_id: callerWallet.owner_account_id, // same tenant, provider credited out-of-band
+          to_account_id: providerWallet?.owner_account_id || callerWallet.owner_account_id,
           description: `x402 agent forwarding: ${skill.skill_id} via ${agent.endpoint_url}`,
           initiated_by_type: 'agent',
           initiated_by_id: callerAgentId,
@@ -1062,6 +1077,21 @@ export class A2ATaskProcessor {
             .update({ balance: Number(currentWallet.balance) + humanAmount })
             .eq('id', callerWallet.id)
             .eq('tenant_id', this.tenantId);
+        }
+        // Rollback provider wallet credit
+        if (providerWallet) {
+          const { data: provCurrent } = await this.supabase
+            .from('wallets')
+            .select('balance')
+            .eq('id', providerWallet.id)
+            .eq('tenant_id', this.tenantId)
+            .single();
+          if (provCurrent) {
+            await this.supabase
+              .from('wallets')
+              .update({ balance: Math.max(0, Number(provCurrent.balance) - humanAmount) })
+              .eq('id', providerWallet.id);
+          }
         }
         await this.taskService.addMessage(taskId, 'agent', [
           { text: 'Failed to create transfer record for x402 payment.' },
@@ -1145,6 +1175,21 @@ export class A2ATaskProcessor {
           .update({ balance: Number(walletAfter.balance) + humanAmount })
           .eq('id', callerWallet.id)
           .eq('tenant_id', this.tenantId);
+      }
+      // Reverse provider wallet credit
+      if (providerWallet) {
+        const { data: provAfter } = await this.supabase
+          .from('wallets')
+          .select('balance')
+          .eq('id', providerWallet.id)
+          .eq('tenant_id', this.tenantId)
+          .single();
+        if (provAfter) {
+          await this.supabase
+            .from('wallets')
+            .update({ balance: Math.max(0, Number(provAfter.balance) - humanAmount) })
+            .eq('id', providerWallet.id);
+        }
       }
 
       // Mark transfer cancelled
