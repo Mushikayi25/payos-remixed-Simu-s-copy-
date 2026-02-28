@@ -631,16 +631,26 @@ async function handleWalletFund(
   tenantId: string,
   supabase: SupabaseClient,
 ): Promise<A2AJsonRpcResponse> {
-  // Environment gate: block in production
-  const isProduction = process.env.NODE_ENV === 'production' &&
-    !process.env.SANDBOX_MODE;
+  // Environment gate: allow in dev, or when tenant uses test API keys
+  const isDevOrSandbox = process.env.NODE_ENV !== 'production' || !!process.env.SANDBOX_MODE;
 
-  if (isProduction) {
-    return buildErrorResponse(
-      requestId,
-      JSON_RPC_ERRORS.INVALID_PARAMS,
-      'Test funding is only available in sandbox/development mode',
-    );
+  if (!isDevOrSandbox) {
+    // In production without SANDBOX_MODE, check if tenant has test API keys
+    const { data: apiKey } = await supabase
+      .from('api_keys')
+      .select('environment')
+      .eq('tenant_id', tenantId)
+      .eq('environment', 'test')
+      .limit(1)
+      .single();
+
+    if (!apiKey) {
+      return buildErrorResponse(
+        requestId,
+        JSON_RPC_ERRORS.INVALID_PARAMS,
+        'Test funding is only available for sandbox tenants (pk_test_* keys)',
+      );
+    }
   }
 
   const amount = Number(payload.amount);

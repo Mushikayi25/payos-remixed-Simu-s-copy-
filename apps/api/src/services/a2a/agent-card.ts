@@ -171,6 +171,19 @@ export function generatePlatformCard(baseUrl?: string): A2AAgentCard {
         description: 'Execute a stablecoin or fiat payment via multiple rails (x402, Pix, SPEI)',
         inputModes: ['text', 'data'],
         outputModes: ['text', 'data'],
+        inputSchema: {
+          type: 'object',
+          required: ['skill', 'amount', 'currency', 'from_account_id', 'to_account_id'],
+          properties: {
+            skill: { const: 'make_payment' },
+            amount: { type: 'number', description: 'Payment amount' },
+            currency: { type: 'string', enum: ['USDC', 'EURC', 'BRL', 'MXN'], description: 'Payment currency' },
+            from_account_id: { type: 'string', format: 'uuid', description: 'Source account ID' },
+            to_account_id: { type: 'string', format: 'uuid', description: 'Destination account ID' },
+            rail: { type: 'string', enum: ['x402', 'pix', 'spei', 'internal'], description: 'Payment rail (default: auto-selected)' },
+            reference: { type: 'string', description: 'Optional payment reference or memo' },
+          },
+        },
         tags: ['payments', 'stablecoin', 'latam'],
       },
       {
@@ -179,6 +192,19 @@ export function generatePlatformCard(baseUrl?: string): A2AAgentCard {
         description: 'Create an AP2 mandate for recurring or automated agent payments',
         inputModes: ['text', 'data'],
         outputModes: ['text', 'data'],
+        inputSchema: {
+          type: 'object',
+          required: ['skill', 'payer_agent_id', 'payee_agent_id', 'max_amount', 'currency'],
+          properties: {
+            skill: { const: 'create_mandate' },
+            payer_agent_id: { type: 'string', format: 'uuid', description: 'Agent ID of the payer' },
+            payee_agent_id: { type: 'string', format: 'uuid', description: 'Agent ID of the payee' },
+            max_amount: { type: 'number', description: 'Maximum amount per execution' },
+            currency: { type: 'string', enum: ['USDC', 'EURC'], description: 'Mandate currency' },
+            frequency: { type: 'string', enum: ['once', 'daily', 'weekly', 'monthly'], description: 'Execution frequency (default: once)' },
+            expires_at: { type: 'string', format: 'date-time', description: 'Optional expiration timestamp' },
+          },
+        },
         tags: ['payments', 'mandates', 'ap2'],
       },
       {
