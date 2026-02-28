@@ -343,6 +343,47 @@ describe('update_agent', () => {
     // Verify agent_skills was accessed for upsert
     expect(supabase.from).toHaveBeenCalledWith('agent_skills');
   });
+
+  it('accepts "skills" as alias for "add_skills"', async () => {
+    const agentId = 'aaaaaaaa-6666-6666-6666-666666666666';
+
+    const supabase = createMockSupabase({
+      agents: {
+        data: {
+          id: agentId,
+          name: 'Bot',
+          description: null,
+          status: 'active',
+          kya_tier: 1,
+          kya_status: 'verified',
+          metadata: null,
+        },
+        error: null,
+      },
+      agent_skills: {
+        data: [
+          { skill_id: 'translate', name: 'Translate', description: null, base_price: 0, currency: 'USDC', tags: [], status: 'active' },
+        ],
+        error: null,
+      },
+    });
+
+    // Send "skills" instead of "add_skills" — should still work
+    const request = buildMessage({
+      skill: 'update_agent',
+      skills: [{ id: 'translate', name: 'Translate' }],
+    });
+    const auth: GatewayAuthContext = { tenantId: 'tenant-1', authType: 'agent', agentId };
+
+    const response = await handleGatewayJsonRpc(request, supabase, BASE_URL, auth);
+    expect(response.error).toBeUndefined();
+
+    // Verify upsert was called on agent_skills
+    expect(supabase.from).toHaveBeenCalledWith('agent_skills');
+    const data = getResultData(response);
+    expect(data!.skills).toHaveLength(1);
+    expect(data!.skills[0].id).toBe('translate');
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -365,8 +365,8 @@ export async function handleUpdateAgent(
     }
   }
 
-  // Upsert add_skills
-  const addSkills = payload.add_skills as Array<Record<string, unknown>> | undefined;
+  // Upsert add_skills (also accept "skills" as alias for convenience)
+  const addSkills = (payload.add_skills || payload.skills) as Array<Record<string, unknown>> | undefined;
   if (Array.isArray(addSkills) && addSkills.length > 0) {
     const skillRows = addSkills.map((s) => ({
       tenant_id: tenantId,
