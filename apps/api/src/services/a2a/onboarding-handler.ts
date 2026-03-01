@@ -249,7 +249,9 @@ export async function handleRegisterAgent(
   }
 
   // Store endpoint in dedicated columns (used by task processor for forwarding)
-  // AND in metadata (used by agent card responses)
+  // AND in metadata (used by agent card responses).
+  // Also set processing_mode = 'managed' so the worker auto-dispatches via
+  // the task processor, which reads endpoint_url/endpoint_enabled for forwarding.
   const endpoint = payload.endpoint as Record<string, unknown> | undefined;
   if (endpoint?.url) {
     const endpointType = String(endpoint.type || 'a2a');
@@ -260,6 +262,7 @@ export async function handleRegisterAgent(
         endpoint_type: endpointType,
         endpoint_secret: endpoint.secret ? String(endpoint.secret) : (endpoint.auth ? String(endpoint.auth) : null),
         endpoint_enabled: true,
+        processing_mode: 'managed',
         metadata: {
           a2a_endpoint: String(endpoint.url),
           a2a_endpoint_auth: endpoint.auth || null,
@@ -337,6 +340,7 @@ export async function handleUpdateAgent(
   }
 
   // Store endpoint in dedicated columns (used by task processor for forwarding)
+  // Also set processing_mode = 'managed' for auto-dispatch via task processor.
   const endpoint = payload.endpoint as Record<string, unknown> | undefined;
   if (endpoint?.url) {
     const endpointType = String(endpoint.type || 'a2a');
@@ -344,6 +348,7 @@ export async function handleUpdateAgent(
     updates.endpoint_type = endpointType;
     updates.endpoint_secret = endpoint.secret ? String(endpoint.secret) : (endpoint.auth ? String(endpoint.auth) : null);
     updates.endpoint_enabled = true;
+    updates.processing_mode = 'managed';
     // Also keep metadata in sync for agent card responses
     updates.metadata = {
       a2a_endpoint: String(endpoint.url),
