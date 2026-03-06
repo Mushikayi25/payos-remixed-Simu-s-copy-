@@ -185,6 +185,19 @@ export async function settleWalletTransfer(
   const isCircleSrc = srcType === 'circle_custodial';
   const isCircleDest = destinationWallet?.wallet_type === 'circle_custodial';
 
+  // Helper to mark transfer as failed
+  const failTransfer = async (error: string, settlement: 'on_chain' | 'ledger') => {
+    await supabase
+      .from('transfers')
+      .update({
+        status: 'failed',
+        protocol_metadata: { ...(protocolMetadata || {}), settlement_type: settlement, error },
+      })
+      .eq('id', transferId)
+      .eq('tenant_id', tenantId);
+    return { success: false as const, settlementType: settlement, error };
+  };
+
   // 1. Attempt on-chain settlement
   if (isOnChainCapable(sourceWallet, destAddress)) {
     const onChainResult = await executeOnChainTransfer({
@@ -200,21 +213,13 @@ export async function settleWalletTransfer(
       // Circle custodial wallets must settle on-chain — no ledger fallback
       if (isCircleSrc) {
         console.error(`[Settlement] On-chain failed for Circle wallet (no fallback): ${onChainResult.error}`);
-        await supabase
-          .from('transfers')
-          .update({
-            status: 'failed',
-            protocol_metadata: { ...(protocolMetadata || {}), settlement_type: 'on_chain', error: onChainResult.error },
-          })
-          .eq('id', transferId);
-        return { success: false, settlementType: 'on_chain', error: onChainResult.error };
+        return failTransfer(onChainResult.error, 'on_chain');
       }
       console.warn(`[Settlement] On-chain failed (falling back to ledger): ${onChainResult.error}`);
     }
   }
 
   // 2. Ledger settlement — update DB balances
-  // For on-chain Circle settlements, sync balances from Circle instead of manual math
   let sourceNewBalance: number | undefined;
   let destinationNewBalance: number | undefined;
 
@@ -244,24 +249,46 @@ export async function settleWalletTransfer(
           .eq('tenant_id', tenantId);
       }
     } catch (syncErr: any) {
-      console.warn(`[Settlement] Post-settlement Circle balance sync failed: ${syncErr.message}`);
+      // Sync failed — fall back to optimistic math so DB isn't stale
+      console.warn(`[Settlement] Post-settlement Circle balance sync failed, using optimistic math: ${syncErr.message}`);
+      const srcBal = typeof sourceWallet.balance === 'string' ? parseFloat(sourceWallet.balance) : sourceWallet.balance;
+      sourceNewBalance = srcBal - amount;
+      await supabase
+        .from('wallets')
+        .update({ balance: sourceNewBalance, updated_at: new Date().toISOString() })
+        .eq('id', sourceWallet.id)
+        .eq('tenant_id', tenantId);
+
+      if (destinationWallet) {
+        const dstBal = typeof destinationWallet.balance === 'string' ? parseFloat(destinationWallet.balance) : destinationWallet.balance;
+        destinationNewBalance = dstBal + amount;
+        await supabase
+          .from('wallets')
+          .update({ balance: destinationNewBalance, updated_at: new Date().toISOString() })
+          .eq('id', destinationWallet.id)
+          .eq('tenant_id', tenantId);
+      }
     }
   } else {
-    // Non-Circle or ledger-only: use manual balance math
-    const sourceBalance = typeof sourceWallet.balance === 'string'
+    // Non-Circle or ledger-only: atomic debit with .gte() guard to prevent double-spend
+    const srcBal = typeof sourceWallet.balance === 'string'
       ? parseFloat(sourceWallet.balance)
       : sourceWallet.balance;
-    sourceNewBalance = sourceBalance - amount;
+    const newBal = srcBal - amount;
 
-    const { error: debitErr } = await supabase
+    const { data: debited, error: debitErr } = await supabase
       .from('wallets')
-      .update({ balance: sourceNewBalance, updated_at: new Date().toISOString() })
+      .update({ balance: newBal, updated_at: new Date().toISOString() })
       .eq('id', sourceWallet.id)
-      .eq('tenant_id', tenantId);
+      .eq('tenant_id', tenantId)
+      .gte('balance', amount)
+      .select('balance')
+      .single();
 
-    if (debitErr) {
-      return { success: false, settlementType, error: 'Ledger debit failed' };
+    if (debitErr || !debited) {
+      return failTransfer('Insufficient balance or concurrent debit', settlementType);
     }
+    sourceNewBalance = parseFloat(debited.balance);
 
     if (destinationWallet) {
       const destBalance = typeof destinationWallet.balance === 'string'
@@ -276,7 +303,14 @@ export async function settleWalletTransfer(
         .eq('tenant_id', tenantId);
 
       if (creditErr) {
-        return { success: false, settlementType, error: 'Ledger credit failed' };
+        // Rollback the debit
+        console.error(`[Settlement] Credit failed, rolling back debit on ${sourceWallet.id}`);
+        await supabase
+          .from('wallets')
+          .update({ balance: (sourceNewBalance ?? 0) + amount, updated_at: new Date().toISOString() })
+          .eq('id', sourceWallet.id)
+          .eq('tenant_id', tenantId);
+        return failTransfer('Ledger credit failed (debit rolled back)', settlementType);
       }
     }
   }
@@ -296,7 +330,8 @@ export async function settleWalletTransfer(
       tx_hash: txHash || null,
       protocol_metadata: updatedMetadata,
     })
-    .eq('id', transferId);
+    .eq('id', transferId)
+    .eq('tenant_id', tenantId);
 
   return {
     success: true,

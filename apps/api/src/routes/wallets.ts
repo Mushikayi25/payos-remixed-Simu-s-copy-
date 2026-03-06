@@ -1381,6 +1381,9 @@ app.post('/:id/sync', async (c) => {
       return c.json({ error: 'Failed to update wallet' }, 500);
     }
 
+    // Strip internal identifiers before returning to client
+    const { provider_wallet_id, token_balances, ...safeSyncData } = syncData as Record<string, unknown>;
+
     return c.json({
       message: 'Wallet synced successfully',
       data: {
@@ -1388,7 +1391,7 @@ app.post('/:id/sync', async (c) => {
         address: wallet.wallet_address,
         balance: formattedBalance,
         currency: wallet.currency,
-        syncData,
+        syncData: safeSyncData,
         syncedAt: updatedWallet.last_synced_at,
       },
     });
