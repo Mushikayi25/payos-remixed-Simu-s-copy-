@@ -84,7 +84,7 @@ export default function OperationDetailPage() {
     data: OperationEvent[];
   }>({
     queryKey: ['operation-correlated', event?.correlation_id],
-    queryFn: () => fetchUsage(`/operations?correlation_id=${encodeURIComponent(event!.correlation_id)}&limit=50`, token),
+    queryFn: () => fetchUsage(`/operations?correlation_id=${encodeURIComponent(event!.correlation_id!)}&limit=50`, token),
     enabled: isConfigured && !!token && !!event?.correlation_id,
   });
 
