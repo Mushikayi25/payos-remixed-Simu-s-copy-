@@ -819,19 +819,24 @@ app.get('/chain-metrics', async (c) => {
 
     const blockchain = c.req.query('blockchain');
     const path = c.req.query('path');
-    const days = parseInt(c.req.query('days') || '7');
+    const daysRaw = parseInt(c.req.query('days') || '7');
+    const days = Number.isFinite(daysRaw) && daysRaw > 0 ? Math.min(daysRaw, 365) : 7;
     const since = new Date(Date.now() - days * 86400_000).toISOString();
 
-    // Aggregated stats
+    const VALID_BLOCKCHAINS = ['base', 'solana', 'ethereum', 'polygon', 'arbitrum', 'avalanche'];
+    const VALID_PATHS = ['circle', 'viem', 'solana', 'cctp', 'skipped'];
+
+    // Aggregated stats — tenant-scoped
     let query = supabase
       .from('chain_performance_metrics')
       .select('blockchain, settlement_path, total_duration_ms, amount_usd, success, created_at')
+      .eq('tenant_id', ctx.tenantId)
       .gte('created_at', since)
       .order('created_at', { ascending: false })
       .limit(1000);
 
-    if (blockchain) query = query.eq('blockchain', blockchain);
-    if (path) query = query.eq('settlement_path', path);
+    if (blockchain && VALID_BLOCKCHAINS.includes(blockchain)) query = query.eq('blockchain', blockchain);
+    if (path && VALID_PATHS.includes(path)) query = query.eq('settlement_path', path);
 
     const { data: metrics, error } = await query;
 
@@ -895,7 +900,7 @@ app.get('/chain-metrics', async (c) => {
     });
   } catch (error: any) {
     console.error('Error in GET /v1/settlement/chain-metrics:', error);
-    return c.json({ error: error.message || 'Internal server error' }, 500);
+    return c.json({ error: 'Failed to retrieve chain metrics' }, 500);
   }
 });
 

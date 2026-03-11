@@ -262,6 +262,7 @@ async function settleNetPosition(
       sourceWallet: srcWallet,
       destinationAddress: dstWallet.wallet_address,
       amount,
+      tenantId,
     });
 
     if (onChainResult.success && onChainResult.txHash) {

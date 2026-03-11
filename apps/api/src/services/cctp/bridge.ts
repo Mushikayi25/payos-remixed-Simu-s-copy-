@@ -225,13 +225,18 @@ export class CCTPBridge {
     timeoutMs: number = 300_000,  // 5 minutes
     pollIntervalMs: number = 5_000,
   ): Promise<CCTPAttestationResult> {
+    // Validate messageHash format (must be 0x-prefixed hex hash)
+    if (!messageHash || !/^0x[0-9a-fA-F]{64}$/.test(messageHash)) {
+      throw new Error('Invalid message hash format — expected 0x-prefixed 32-byte hex string');
+    }
+
     const attestationUrl = ATTESTATION_API[this.environment];
     const deadline = Date.now() + timeoutMs;
 
     while (Date.now() < deadline) {
       try {
         const response = await fetch(
-          `${attestationUrl}/attestations/${messageHash}`,
+          `${attestationUrl}/attestations/${encodeURIComponent(messageHash)}`,
         );
 
         if (response.ok) {
@@ -283,6 +288,26 @@ export class CCTPBridge {
    */
   async transfer(request: CCTPTransferRequest): Promise<CCTPTransferResult> {
     const transferId = crypto.randomUUID();
+
+    // Validate amount
+    if (!Number.isFinite(request.amount) || request.amount <= 0) {
+      return { success: false, transferId, status: { status: 'failed' }, error: 'Amount must be a positive finite number' };
+    }
+    // Guard against floating-point precision loss (USDC has 6 decimals, max safe: ~$9M)
+    if (request.amount * 1e6 > Number.MAX_SAFE_INTEGER) {
+      return { success: false, transferId, status: { status: 'failed' }, error: 'Amount exceeds safe precision limit' };
+    }
+
+    // Validate chain types at runtime
+    const VALID_CHAINS: CCTPChain[] = ['base', 'ethereum', 'solana', 'polygon', 'arbitrum', 'avalanche'];
+    if (!VALID_CHAINS.includes(request.sourceChain) || !VALID_CHAINS.includes(request.destinationChain)) {
+      return { success: false, transferId, status: { status: 'failed' }, error: 'Invalid source or destination chain' };
+    }
+
+    // Validate destination address format
+    if (!request.destinationAddress || request.destinationAddress.length < 20 || request.destinationAddress.length > 100) {
+      return { success: false, transferId, status: { status: 'failed' }, error: 'Invalid destination address' };
+    }
 
     try {
       console.log(`[CCTP] Starting transfer ${transferId}: ${request.amount} USDC ${request.sourceChain} → ${request.destinationChain}`);

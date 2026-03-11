@@ -38,13 +38,18 @@ export interface ChainMetric {
 
 /**
  * Record a chain performance metric. Fire-and-forget (non-blocking).
+ * Requires tenantId for proper tenant isolation. Skips recording if missing.
  */
 export function recordChainMetric(metric: ChainMetric): void {
+  if (!metric.tenantId) {
+    console.warn('[ChainMetrics] Skipping metric — tenantId is required');
+    return;
+  }
   const supabase = createClient();
   supabase
     .from('chain_performance_metrics')
     .insert({
-      tenant_id: metric.tenantId || '00000000-0000-0000-0000-000000000000',
+      tenant_id: metric.tenantId,
       blockchain: metric.blockchain,
       settlement_path: metric.settlementPath,
       transfer_id: metric.transferId || null,
@@ -85,6 +90,7 @@ export interface OnChainTransferParams {
   sourceWallet: SettlementWallet;
   destinationAddress: string;
   amount: number;
+  tenantId?: string;
 }
 
 export interface OnChainTransferResult {
@@ -177,7 +183,7 @@ export function isCrossChain(
 export async function executeOnChainTransfer(
   params: OnChainTransferParams,
 ): Promise<OnChainTransferResult> {
-  const { sourceWallet, destinationAddress, amount } = params;
+  const { sourceWallet, destinationAddress, amount, tenantId } = params;
   const srcType = sourceWallet.wallet_type || 'internal';
   const isSandbox = process.env.PAYOS_ENVIRONMENT === 'sandbox';
   const startTime = Date.now();
@@ -192,9 +198,10 @@ export async function executeOnChainTransfer(
 
   // Helper to record metric on any exit path
   const withMetric = (result: OnChainTransferResult): OnChainTransferResult => {
-    if (result.path !== 'skipped') {
+    if (result.path !== 'skipped' && tenantId) {
       const dstChain = detectAddressChain(destinationAddress);
       recordChainMetric({
+        tenantId,
         blockchain: dstChain === 'sol' ? 'solana' : 'base',
         settlementPath: result.path,
         totalDurationMs: Date.now() - startTime,
@@ -481,6 +488,7 @@ export async function settleWalletTransfer(
       sourceWallet,
       destinationAddress: destAddress,
       amount,
+      tenantId,
     });
 
     if (onChainResult.success && onChainResult.txHash) {

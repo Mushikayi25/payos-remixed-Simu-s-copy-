@@ -327,8 +327,12 @@ function getSolanaKeypair(): Keypair {
 
   // JSON byte array (e.g., from `solana-keygen new --outfile`)
   if (key.startsWith('[')) {
-    const bytes = new Uint8Array(JSON.parse(key));
-    return Keypair.fromSecretKey(bytes);
+    try {
+      const bytes = new Uint8Array(JSON.parse(key));
+      return Keypair.fromSecretKey(bytes);
+    } catch {
+      throw new Error('SOLANA_PRIVATE_KEY is malformed JSON byte array. Expected format: [1,2,3,...]');
+    }
   }
 
   // Hex-encoded secret key (64 hex chars = 32 bytes)

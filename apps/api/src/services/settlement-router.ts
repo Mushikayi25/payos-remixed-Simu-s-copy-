@@ -287,7 +287,7 @@ export class SettlementRouter {
     const decisionTime = Date.now() - startTime;
 
     // Store routing decision in transfer metadata
-    await this.storeRoutingDecision(request.transferId, {
+    await this.storeRoutingDecision(request.transferId, request.tenantId, {
       selectedRail: selectedRoute.rail,
       alternativeRails: availableRails.filter(r => r !== selectedRoute.rail),
       decisionTime,
@@ -320,7 +320,7 @@ export class SettlementRouter {
       const routing = await this.routeTransfer(request);
 
       // Update transfer status to processing
-      await this.updateTransferStatus(request.transferId, 'processing', {
+      await this.updateTransferStatus(request.transferId, request.tenantId, 'processing', {
         settlementRail: routing.selectedRail,
         routingDecision: routing,
       });
@@ -330,7 +330,7 @@ export class SettlementRouter {
 
       // Update transfer with result
       if (result.success) {
-        await this.updateTransferStatus(request.transferId, result.status, {
+        await this.updateTransferStatus(request.transferId, request.tenantId, result.status, {
           settlementId: result.settlementId,
           feeAmount: result.feeAmount,
           netAmount: result.netAmount,
@@ -570,8 +570,20 @@ export class SettlementRouter {
       const { getCCTPBridge } = await import('./cctp/bridge.js');
       const bridge = getCCTPBridge();
 
-      const sourceChain = request.protocolMetadata?.sourceChain || 'base';
-      const destinationChain = request.protocolMetadata?.destinationChain || 'solana';
+      const VALID_CCTP_CHAINS = ['base', 'ethereum', 'solana', 'polygon', 'arbitrum', 'avalanche'];
+      const rawSourceChain = request.protocolMetadata?.sourceChain || 'base';
+      const rawDestChain = request.protocolMetadata?.destinationChain || 'solana';
+
+      if (!VALID_CCTP_CHAINS.includes(rawSourceChain) || !VALID_CCTP_CHAINS.includes(rawDestChain)) {
+        return {
+          success: false, transferId: request.transferId, status: 'failed', rail: 'cctp_bridge' as const,
+          grossAmount: request.amount, feeAmount, netAmount,
+          error: { code: 'INVALID_CHAIN', message: 'Invalid source or destination chain for CCTP', retryable: false },
+        };
+      }
+
+      const sourceChain = rawSourceChain;
+      const destinationChain = rawDestChain;
       const destinationAddress = request.protocolMetadata?.destinationAddress;
 
       if (!destinationAddress) {
@@ -830,7 +842,8 @@ export class SettlementRouter {
             instructionExpiresAt: instruction.expiresAt,
           },
         })
-        .eq('id', request.transferId);
+        .eq('id', request.transferId)
+        .eq('tenant_id', request.tenantId);
 
       return {
         success: true,
@@ -941,7 +954,8 @@ export class SettlementRouter {
             dtvcExpiresAt: dtvc.expiresAt,
           },
         })
-        .eq('id', request.transferId);
+        .eq('id', request.transferId)
+        .eq('tenant_id', request.tenantId);
 
       return {
         success: true,
@@ -1141,7 +1155,7 @@ export class SettlementRouter {
     return error ? null : data;
   }
 
-  private async storeRoutingDecision(transferId: string, decision: any) {
+  private async storeRoutingDecision(transferId: string, tenantId: string, decision: any) {
     await this.supabase
       .from('transfers')
       .update({
@@ -1150,25 +1164,27 @@ export class SettlementRouter {
           routedAt: new Date().toISOString(),
         },
       })
-      .eq('id', transferId);
+      .eq('id', transferId)
+      .eq('tenant_id', tenantId);
   }
 
   private async updateTransferStatus(
-    transferId: string, 
-    status: string, 
+    transferId: string,
+    tenantId: string,
+    status: string,
     metadata?: Record<string, any>
   ) {
     const updateData: any = { status };
-    
+
     if (metadata) {
       updateData.settlement_metadata = metadata;
     }
-    
+
     if (status === 'completed' && metadata?.settledAt) {
       updateData.settled_at = metadata.settledAt;
       updateData.completed_at = metadata.settledAt;
     }
-    
+
     if (metadata?.feeAmount !== undefined) {
       updateData.fee_amount = metadata.feeAmount;
     }
@@ -1176,7 +1192,8 @@ export class SettlementRouter {
     await this.supabase
       .from('transfers')
       .update(updateData)
-      .eq('id', transferId);
+      .eq('id', transferId)
+      .eq('tenant_id', tenantId);
   }
 
   private async scheduleRetry(
@@ -1201,7 +1218,8 @@ export class SettlementRouter {
           nextRetryAt: new Date(Date.now() + delayMs).toISOString(),
         },
       })
-      .eq('id', request.transferId);
+      .eq('id', request.transferId)
+      .eq('tenant_id', request.tenantId);
   }
 
   private isRetryableError(error: any): boolean {

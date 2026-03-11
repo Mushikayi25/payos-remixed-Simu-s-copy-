@@ -187,6 +187,7 @@ export class AsyncSettlementWorker {
       sourceWallet,
       destinationAddress: destWallet.wallet_address,
       amount: transfer.amount,
+      tenantId: transfer.tenant_id,
     });
 
     if (onChainResult.success && onChainResult.txHash) {
