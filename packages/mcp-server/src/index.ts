@@ -1381,6 +1381,212 @@ export const tools: Tool[] = [
   },
 
   // ==========================================================================
+  // Agent Wallet Policy Tools (Epic 18)
+  // ==========================================================================
+  {
+    name: 'agent_wallet_evaluate_policy',
+    description: 'Evaluate contract policy for an agent payment (dry-run). Returns approve/escalate/deny decision with detailed check results and optional counter-offer.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agentId: {
+          type: 'string',
+          description: 'UUID of the agent whose wallet policy to evaluate',
+        },
+        amount: {
+          type: 'number',
+          description: 'Payment amount to evaluate',
+        },
+        currency: {
+          type: 'string',
+          description: 'Currency (default: USDC)',
+        },
+        action_type: {
+          type: 'string',
+          enum: ['payment', 'escrow_create', 'escrow_release', 'contract_sign', 'negotiation_check', 'counterparty_check'],
+          description: 'Type of action to evaluate (default: negotiation_check)',
+        },
+        contract_type: {
+          type: 'string',
+          description: 'Contract type (e.g. payment, escrow, subscription, loan)',
+        },
+        counterparty_agent_id: {
+          type: 'string',
+          description: 'UUID of the counterparty agent (optional)',
+        },
+        counterparty_address: {
+          type: 'string',
+          description: 'Wallet address of external counterparty (optional)',
+        },
+      },
+      required: ['agentId', 'amount'],
+    },
+  },
+  {
+    name: 'agent_wallet_get_exposures',
+    description: 'List per-counterparty exposure windows (24h/7d/30d) for an agent wallet. Shows active contracts, escrows, and total volume per counterparty.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agentId: {
+          type: 'string',
+          description: 'UUID of the agent',
+        },
+      },
+      required: ['agentId'],
+    },
+  },
+  {
+    name: 'agent_wallet_get_evaluations',
+    description: 'Get the policy evaluation audit log for an agent wallet. Shows historical approve/escalate/deny decisions with check details.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agentId: {
+          type: 'string',
+          description: 'UUID of the agent',
+        },
+        page: {
+          type: 'number',
+          description: 'Page number (optional)',
+        },
+        limit: {
+          type: 'number',
+          description: 'Results per page (optional)',
+        },
+      },
+      required: ['agentId'],
+    },
+  },
+  {
+    name: 'agent_wallet_get',
+    description: "Get an agent's wallet details including balance, status, and spending policy.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agentId: {
+          type: 'string',
+          description: 'UUID of the agent',
+        },
+      },
+      required: ['agentId'],
+    },
+  },
+  {
+    name: 'agent_wallet_freeze',
+    description: "Freeze an agent's wallet, disabling all payments. Use to emergency-stop an agent.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agentId: {
+          type: 'string',
+          description: 'UUID of the agent whose wallet to freeze',
+        },
+      },
+      required: ['agentId'],
+    },
+  },
+  {
+    name: 'agent_wallet_unfreeze',
+    description: "Unfreeze an agent's wallet, re-enabling payments.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agentId: {
+          type: 'string',
+          description: 'UUID of the agent whose wallet to unfreeze',
+        },
+      },
+      required: ['agentId'],
+    },
+  },
+  {
+    name: 'agent_wallet_set_policy',
+    description: "Set or update the spending and contract policy on an agent's wallet. Supports daily/monthly limits, approval thresholds, counterparty blocklists, exposure caps, and contract type restrictions.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agentId: {
+          type: 'string',
+          description: 'UUID of the agent',
+        },
+        dailySpendLimit: {
+          type: 'number',
+          description: 'Daily spending limit in wallet currency (optional)',
+        },
+        monthlySpendLimit: {
+          type: 'number',
+          description: 'Monthly spending limit (optional)',
+        },
+        requiresApprovalAbove: {
+          type: 'number',
+          description: 'Amount above which human approval is required (optional)',
+        },
+        approvedVendors: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'List of approved vendor domains (optional)',
+        },
+        contractPolicy: {
+          type: 'object',
+          description: 'Contract policy rules (optional)',
+          properties: {
+            counterpartyBlocklist: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Blocked agent IDs or addresses',
+            },
+            counterpartyAllowlist: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Allowed agent IDs or addresses (if set, only these are permitted)',
+            },
+            minCounterpartyKyaTier: {
+              type: 'number',
+              description: 'Minimum counterparty KYA tier (0-3)',
+            },
+            allowedContractTypes: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Allowed contract types (e.g. payment, escrow)',
+            },
+            blockedContractTypes: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Blocked contract types (e.g. loan)',
+            },
+            maxExposure24h: {
+              type: 'number',
+              description: 'Max 24h exposure per counterparty',
+            },
+            maxExposure7d: {
+              type: 'number',
+              description: 'Max 7d exposure per counterparty',
+            },
+            maxExposure30d: {
+              type: 'number',
+              description: 'Max 30d exposure per counterparty',
+            },
+            maxActiveContracts: {
+              type: 'number',
+              description: 'Max active contracts per counterparty',
+            },
+            maxActiveEscrows: {
+              type: 'number',
+              description: 'Max active escrows per counterparty',
+            },
+            escalateAbove: {
+              type: 'number',
+              description: 'Amount above which to escalate to human approval',
+            },
+          },
+        },
+      },
+      required: ['agentId'],
+    },
+  },
+
+  // ==========================================================================
   // x402 Micropayment Tools
   // ==========================================================================
   {
@@ -2671,6 +2877,103 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               text: JSON.stringify(result, null, 2),
             },
           ],
+        };
+      }
+
+      // ======================================================================
+      // Agent Wallet Policy Tools (Epic 18)
+      // ======================================================================
+
+      case 'agent_wallet_evaluate_policy': {
+        const { agentId, amount, currency, action_type, contract_type, counterparty_agent_id, counterparty_address } =
+          args as {
+            agentId: string;
+            amount: number;
+            currency?: string;
+            action_type?: string;
+            contract_type?: string;
+            counterparty_agent_id?: string;
+            counterparty_address?: string;
+          };
+        const result = await sly.request(`/v1/agents/${agentId}/wallet/policy/evaluate`, {
+          method: 'POST',
+          body: JSON.stringify({
+            amount,
+            currency: currency || 'USDC',
+            action_type: action_type || 'negotiation_check',
+            contract_type,
+            counterparty_agent_id,
+            counterparty_address,
+          }),
+        });
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case 'agent_wallet_get_exposures': {
+        const { agentId } = args as { agentId: string };
+        const result = await sly.request(`/v1/agents/${agentId}/wallet/exposures`);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case 'agent_wallet_get_evaluations': {
+        const { agentId, page, limit } = args as { agentId: string; page?: number; limit?: number };
+        const params = new URLSearchParams();
+        if (page) params.set('page', String(page));
+        if (limit) params.set('limit', String(limit));
+        const qs = params.toString();
+        const result = await sly.request(`/v1/agents/${agentId}/wallet/policy/evaluations${qs ? `?${qs}` : ''}`);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case 'agent_wallet_get': {
+        const { agentId } = args as { agentId: string };
+        const result = await sly.request(`/v1/agents/${agentId}/wallet`);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case 'agent_wallet_freeze': {
+        const { agentId } = args as { agentId: string };
+        const result = await sly.request(`/v1/agents/${agentId}/wallet/freeze`, {
+          method: 'POST',
+        });
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case 'agent_wallet_unfreeze': {
+        const { agentId } = args as { agentId: string };
+        const result = await sly.request(`/v1/agents/${agentId}/wallet/unfreeze`, {
+          method: 'POST',
+        });
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case 'agent_wallet_set_policy': {
+        const { agentId, ...policyFields } = args as {
+          agentId: string;
+          dailySpendLimit?: number;
+          monthlySpendLimit?: number;
+          requiresApprovalAbove?: number;
+          approvedVendors?: string[];
+          contractPolicy?: Record<string, unknown>;
+        };
+        const result = await sly.request(`/v1/agents/${agentId}/wallet/policy`, {
+          method: 'PUT',
+          body: JSON.stringify(policyFields),
+        });
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
         };
       }
 

@@ -63,7 +63,22 @@ const spendingPolicySchema = z.object({
   autoFundEnabled: z.boolean().default(false),
   autoFundThreshold: z.number().positive().optional(),
   autoFundAmount: z.number().positive().optional(),
-  autoFundSourceAccountId: z.string().uuid().optional()
+  autoFundSourceAccountId: z.string().uuid().optional(),
+  // Epic 18: Contract policy fields
+  contractPolicy: z.object({
+    counterpartyBlocklist: z.array(z.string()).optional(),
+    counterpartyAllowlist: z.array(z.string()).optional(),
+    minCounterpartyKyaTier: z.number().int().min(0).max(3).optional(),
+    minCounterpartyReputation: z.number().min(0).max(1).optional(),
+    allowedContractTypes: z.array(z.string()).optional(),
+    blockedContractTypes: z.array(z.string()).optional(),
+    maxExposure24h: z.number().positive().optional(),
+    maxExposure7d: z.number().positive().optional(),
+    maxExposure30d: z.number().positive().optional(),
+    maxActiveContracts: z.number().int().nonnegative().optional(),
+    maxActiveEscrows: z.number().int().nonnegative().optional(),
+    escalateAbove: z.number().positive().optional(),
+  }).optional(),
 }).optional();
 
 // Schema for creating a NEW wallet (internal or Circle)

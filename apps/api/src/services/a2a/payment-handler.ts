@@ -11,6 +11,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { A2ATaskService } from './task-service.js';
 import type { InputRequiredContext } from './types.js';
 import { authorizeWalletTransfer, isOnChainCapable } from '../wallet-settlement.js';
+import { ContractPolicyEngine } from '../contract-policy-engine.js';
+import { CounterpartyExposureService } from '../counterparty-exposure.service.js';
 
 interface PaymentRequirement {
   amount: number;
@@ -74,6 +76,63 @@ export class A2APaymentHandler {
     // Check balance
     if (parseFloat(fromWallet.balance) < amount) {
       return { success: false, error: `Insufficient balance: ${fromWallet.balance} < ${amount}` };
+    }
+
+    // Epic 18: Contract policy engine check before payment
+    try {
+      const policyEngine = new ContractPolicyEngine(this.supabase);
+      const policyResult = await policyEngine.evaluate({
+        walletId: fromWallet.id,
+        agentId: fromAgentId,
+        tenantId: this.tenantId,
+        amount,
+        currency,
+        actionType: 'payment',
+        counterpartyAgentId: toAgentId,
+        protocol: 'a2a',
+        correlationId: taskId,
+      });
+
+      if (policyResult.decision === 'deny') {
+        return {
+          success: false,
+          error: `Contract policy denied: ${policyResult.reasons.join('; ')}`,
+        };
+      }
+
+      if (policyResult.decision === 'escalate') {
+        // Wire to existing approval workflow
+        try {
+          const { ApprovalWorkflowService } = await import('../approval-workflow.js');
+          const approvalService = new ApprovalWorkflowService(this.supabase);
+          const approval = await approvalService.createApproval({
+            tenantId: this.tenantId,
+            walletId: fromWallet.id,
+            agentId: fromAgentId,
+            protocol: 'x402', // closest match for A2A internal payments
+            amount,
+            currency,
+            recipient: { name: `agent:${toAgentId}` },
+            paymentContext: {
+              task_id: taskId,
+              from_agent_id: fromAgentId,
+              to_agent_id: toAgentId,
+              escalation_reasons: policyResult.reasons,
+            },
+          });
+          return {
+            success: false,
+            error: `Payment requires approval (${approval.id}): ${policyResult.reasons.join('; ')}`,
+          };
+        } catch (approvalErr: any) {
+          console.warn('[A2A-policy] Approval creation failed, denying payment:', approvalErr.message);
+          return { success: false, error: `Policy escalation failed: ${approvalErr.message}` };
+        }
+      }
+    } catch (policyErr: any) {
+      // Policy engine failure is non-fatal for backwards compatibility
+      // Log but allow payment to proceed
+      console.warn('[A2A-policy] Contract policy engine error (non-fatal):', policyErr.message);
     }
 
     const onChainCapable = isOnChainCapable(fromWallet, toWallet.wallet_address);
@@ -187,6 +246,22 @@ export class A2APaymentHandler {
 
     // Link payment to task
     await this.taskService.linkPayment(taskId, transfer.id);
+
+    // Epic 18: Record counterparty exposure after successful payment
+    try {
+      const exposureService = new CounterpartyExposureService(this.supabase);
+      await exposureService.recordExposure({
+        tenantId: this.tenantId,
+        walletId: fromWallet.id,
+        agentId: fromAgentId,
+        counterparty: { counterpartyAgentId: toAgentId },
+        amount,
+        currency,
+        type: 'payment',
+      });
+    } catch (expErr: any) {
+      console.warn('[A2A-exposure] Failed to record exposure (non-fatal):', expErr.message);
+    }
 
     return { success: true, transferId: transfer.id };
   }

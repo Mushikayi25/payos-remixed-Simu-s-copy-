@@ -37,6 +37,7 @@ import { CapabilitiesClient } from './capabilities';
 import { LangChainTools } from './langchain/tools';
 import { CardsClient } from './cards';
 import { A2AClient } from './protocols/a2a/client';
+import { AgentWalletsClient } from './protocols/agent-wallets/client';
 
 /**
  * Main Sly SDK class
@@ -107,6 +108,12 @@ export class Sly extends SlyClient {
    */
   public readonly a2a: A2AClient;
 
+  /**
+   * Agent Wallets client
+   * Contract policy evaluation, exposure tracking, wallet management
+   */
+  public readonly agentWallets: AgentWalletsClient;
+
   constructor(config: SlyConfig) {
     // Validate API key
     if (!config.apiKey || config.apiKey.trim() === '') {
@@ -149,6 +156,9 @@ export class Sly extends SlyClient {
 
     // Initialize A2A client
     this.a2a = new A2AClient(this);
+
+    // Initialize Agent Wallets client (Epic 18)
+    this.agentWallets = new AgentWalletsClient(this);
   }
 }
 

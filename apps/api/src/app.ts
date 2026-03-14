@@ -86,6 +86,7 @@ import searchRouter from './routes/search.js';
 import paymentHandlersListRouter from './routes/payment-handlers-list.js';
 import portalTokensRouter from './routes/portal-tokens.js';
 import usageRouter from './routes/usage.js';
+import agentWalletsRouter from './routes/agent-wallets.js';
 
 const app = new Hono();
 
@@ -328,6 +329,7 @@ v1.route('/search', searchRouter); // Unified global search
 v1.route('/payment-handlers', paymentHandlersListRouter); // DB-driven handler registry
 v1.route('/portal-tokens', portalTokensRouter); // Portal token CRUD (Epic 65)
 v1.route('/usage', usageRouter); // Usage API (Epic 65)
+v1.route('/agents', agentWalletsRouter); // Agent wallet policy & exposure (Epic 18)
 // NOTE: Removed catch-all payment-methods mount to prevent route conflicts
 // Payment methods are already accessible at /v1/payment-methods
 // Account-specific payment methods handled via accounts router
