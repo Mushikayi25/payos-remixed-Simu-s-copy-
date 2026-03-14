@@ -24,16 +24,22 @@ export async function GET(request: Request) {
           // Response may be wrapped as { data: { user, tenant } }
           const me = meData.data || meData;
           if (!me.tenant) {
-            // No tenant — redirect to setup
+            // No tenant — during closed beta, block new OAuth users
+            const isClosedBeta = process.env.NEXT_PUBLIC_CLOSED_BETA === 'true';
+            if (isClosedBeta) {
+              return NextResponse.redirect(`${origin}/auth/no-access`);
+            }
             return NextResponse.redirect(`${origin}/auth/setup`);
           }
         } else {
-          // API error — redirect to setup as fallback
-          return NextResponse.redirect(`${origin}/auth/setup`);
+          // API error — redirect to no-access during beta, setup otherwise
+          const isClosedBeta = process.env.NEXT_PUBLIC_CLOSED_BETA === 'true';
+          return NextResponse.redirect(`${origin}/auth/${isClosedBeta ? 'no-access' : 'setup'}`);
         }
       } catch {
-        // API unreachable — redirect to setup as fallback
-        return NextResponse.redirect(`${origin}/auth/setup`);
+        // API unreachable — redirect to no-access during beta, setup otherwise
+        const isClosedBeta = process.env.NEXT_PUBLIC_CLOSED_BETA === 'true';
+        return NextResponse.redirect(`${origin}/auth/${isClosedBeta ? 'no-access' : 'setup'}`);
       }
 
       // User has tenant — proceed to requested page

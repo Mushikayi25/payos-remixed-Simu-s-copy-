@@ -104,10 +104,21 @@ export default function LoginPage() {
           <OAuthButtons mode="login" />
 
           <div className="mt-4 text-center text-sm text-muted-foreground">
-            Don't have an account?{' '}
-            <Link href="/auth/signup" className="text-primary hover:underline">
-              Sign up
-            </Link>
+            {process.env.NEXT_PUBLIC_CLOSED_BETA === 'true' ? (
+              <>
+                Don't have access yet?{' '}
+                <Link href="/auth/signup" className="text-primary hover:underline">
+                  Apply for the beta
+                </Link>
+              </>
+            ) : (
+              <>
+                Don't have an account?{' '}
+                <Link href="/auth/signup" className="text-primary hover:underline">
+                  Sign up
+                </Link>
+              </>
+            )}
           </div>
         </CardContent>
       </Card>
