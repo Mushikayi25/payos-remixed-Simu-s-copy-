@@ -1726,14 +1726,28 @@ auth.post('/beta/apply', async (c) => {
       organizationName: z.string().max(255).optional(),
       useCase: z.string().max(2000).optional(),
       referralSource: z.string().max(255).optional(),
+      applicantType: z.enum(['human', 'agent']).optional(),
+      agentName: z.string().max(255).optional(),
+      purpose: z.string().max(1000).optional(),
+      model: z.string().max(255).optional(),
     });
 
     const validated = schema.parse(body);
+    const isAgent = validated.applicantType === 'agent';
 
     const application = await submitApplication({
       email: validated.email,
-      organizationName: validated.organizationName,
-      useCase: validated.useCase,
+      applicantType: validated.applicantType || 'human',
+      ...(isAgent
+        ? {
+            agentName: validated.agentName,
+            useCase: validated.purpose,
+            metadata: validated.model ? { model: validated.model } : undefined,
+          }
+        : {
+            organizationName: validated.organizationName,
+            useCase: validated.useCase,
+          }),
       referralSource: validated.referralSource,
       ipAddress: ip,
     });
@@ -1751,7 +1765,7 @@ auth.post('/beta/apply', async (c) => {
         to: adminEmail,
         applicantEmail: validated.email,
         organizationName: validated.organizationName,
-        applicantType: 'human',
+        applicantType: validated.applicantType || 'human',
       }).catch(err => console.error('[email] Beta admin notification error:', err));
     }
 

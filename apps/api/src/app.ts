@@ -131,6 +131,7 @@ app.use(
       'http://localhost:3001',
       'https://payos-web.vercel.app', // Production dashboard (legacy)
       'https://sly-ai.vercel.app',    // Production dashboard
+      'https://app.getsly.ai',        // Production dashboard (primary)
     ],
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization', 'X-Idempotency-Key', 'X-Request-ID'],

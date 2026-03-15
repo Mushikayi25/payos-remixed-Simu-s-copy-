@@ -337,6 +337,24 @@ export function generatePlatformCard(baseUrl?: string): A2AAgentCard {
         },
         tags: ['onboarding', 'kya', 'verification', 'agents'],
       },
+      {
+        id: 'apply_for_beta',
+        name: 'Apply for Beta Access',
+        description: 'Apply for Sly closed beta access. Submit agent details to join the waitlist. No authentication required.',
+        inputModes: ['data'],
+        outputModes: ['data'],
+        inputSchema: {
+          type: 'object',
+          required: ['name', 'email'],
+          properties: {
+            name: { type: 'string', description: 'Agent name' },
+            email: { type: 'string', format: 'email', description: 'Contact email for the agent developer' },
+            purpose: { type: 'string', description: 'What the agent does' },
+            model: { type: 'string', description: 'AI model powering the agent (e.g. Claude, GPT-4)' },
+          },
+        },
+        tags: ['onboarding', 'beta', 'agents'],
+      },
     ],
     supportedInterfaces: [
       {

@@ -13,6 +13,7 @@ import { JSON_RPC_ERRORS } from './types.js';
 import type { GatewayAuthContext } from './gateway-handler.js';
 import { generateAgentToken, hashApiKey, getKeyPrefix } from '../../utils/crypto.js';
 import { computeEffectiveLimits, DEFAULT_PERMISSIONS } from '../../routes/agents.js';
+import { submitApplication } from '../beta-access.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -1319,4 +1320,60 @@ export async function handleCheckTask(
       parts: a.parts,
     })),
   });
+}
+
+// ============================================================================
+// apply_for_beta
+// ============================================================================
+
+/**
+ * Submit a beta access application via A2A.
+ * No authentication required — this is a public skill.
+ */
+export async function handleApplyForBeta(
+  requestId: string | number,
+  payload: Record<string, unknown>,
+): Promise<A2AJsonRpcResponse> {
+  const name = payload.name as string | undefined;
+  const email = payload.email as string | undefined;
+  const purpose = payload.purpose as string | undefined;
+  const model = payload.model as string | undefined;
+
+  if (!name || !email) {
+    return buildErrorResponse(
+      requestId,
+      JSON_RPC_ERRORS.INVALID_PARAMS,
+      'name and email are required',
+    );
+  }
+
+  // Basic email validation
+  if (!email.includes('@') || email.length > 255) {
+    return buildErrorResponse(
+      requestId,
+      JSON_RPC_ERRORS.INVALID_PARAMS,
+      'Invalid email address',
+    );
+  }
+
+  try {
+    const application = await submitApplication({
+      email,
+      agentName: name,
+      applicantType: 'agent',
+      useCase: purpose,
+      metadata: model ? { model, source: 'a2a' } : { source: 'a2a' },
+    });
+
+    return buildSuccessResponse(requestId, 'apply_for_beta_result', {
+      message: 'Application received. We will review your agent and email you when access is ready.',
+      applicationId: application.id,
+    });
+  } catch (error: any) {
+    return buildErrorResponse(
+      requestId,
+      JSON_RPC_ERRORS.INTERNAL_ERROR,
+      error.message || 'Failed to submit application',
+    );
+  }
 }

@@ -7,7 +7,7 @@ import { Button } from '@sly/ui';
 import { Input } from '@sly/ui';
 import { Label } from '@sly/ui';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@sly/ui';
-import { Loader2, Zap, Send } from 'lucide-react';
+import { Loader2, Zap, Send, Bot, User, ChevronDown, ChevronUp } from 'lucide-react';
 import Link from 'next/link';
 import { OAuthButtons } from '@/components/auth/oauth-buttons';
 
@@ -42,6 +42,15 @@ function SignUpPageInner() {
   const [referralSource, setReferralSource] = useState('');
   const [applicationSubmitted, setApplicationSubmitted] = useState(false);
 
+  // Agent application state
+  const [applicantType, setApplicantType] = useState<'human' | 'agent'>(
+    searchParams.get('type') === 'agent' ? 'agent' : 'human'
+  );
+  const [agentName, setAgentName] = useState('');
+  const [purpose, setPurpose] = useState('');
+  const [model, setModel] = useState('');
+  const [showApiDocs, setShowApiDocs] = useState(false);
+
   async function handleApply(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -53,8 +62,17 @@ function SignUpPageInner() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email,
-          organizationName: organizationName || undefined,
-          useCase: useCase || undefined,
+          ...(applicantType === 'agent'
+            ? {
+                applicantType: 'agent',
+                agentName: agentName || undefined,
+                purpose: purpose || undefined,
+                model: model || undefined,
+              }
+            : {
+                organizationName: organizationName || undefined,
+                useCase: useCase || undefined,
+              }),
           referralSource: referralSource || undefined,
         }),
       });
@@ -154,7 +172,9 @@ function SignUpPageInner() {
             </div>
             <CardTitle className="text-2xl font-bold">Application received</CardTitle>
             <CardDescription>
-              Thanks for applying! We review applications on a rolling basis and will email you when your access is ready.
+              {applicantType === 'agent'
+                ? "Thanks for registering your agent! We'll review it and email you when access is ready."
+                : 'Thanks for applying! We review applications on a rolling basis and will email you when your access is ready.'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -210,43 +230,122 @@ function SignUpPageInner() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Human / Agent toggle */}
+            <div className="flex gap-2 mb-4">
+              <button
+                type="button"
+                onClick={() => setApplicantType('human')}
+                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md border transition-colors ${
+                  applicantType === 'human'
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background text-muted-foreground border-border hover:bg-muted'
+                }`}
+              >
+                <User className="h-4 w-4" />
+                I&apos;m a person
+              </button>
+              <button
+                type="button"
+                onClick={() => setApplicantType('agent')}
+                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md border transition-colors ${
+                  applicantType === 'agent'
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background text-muted-foreground border-border hover:bg-muted'
+                }`}
+              >
+                <Bot className="h-4 w-4" />
+                I&apos;m registering an agent
+              </button>
+            </div>
+
             <form onSubmit={handleApply} className="space-y-4">
               {error && (
                 <div className="p-3 text-sm text-red-500 bg-red-50 dark:bg-red-900/20 rounded-md">
                   {error}
                 </div>
               )}
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="organizationName">Organization Name <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                <Input
-                  id="organizationName"
-                  type="text"
-                  placeholder="Acme Inc."
-                  value={organizationName}
-                  onChange={(e) => setOrganizationName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="useCase">What will you use Sly for? <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                <textarea
-                  id="useCase"
-                  placeholder="Tell us about your use case..."
-                  value={useCase}
-                  onChange={(e) => setUseCase(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border rounded-md bg-background resize-none h-20"
-                />
-              </div>
+
+              {applicantType === 'agent' ? (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="agentName">Agent Name</Label>
+                    <Input
+                      id="agentName"
+                      type="text"
+                      placeholder="My Payment Agent"
+                      value={agentName}
+                      onChange={(e) => setAgentName(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Contact Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="dev@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="purpose">Purpose <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                    <textarea
+                      id="purpose"
+                      placeholder="What does your agent do?"
+                      value={purpose}
+                      onChange={(e) => setPurpose(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border rounded-md bg-background resize-none h-20"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="model">Model <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                    <Input
+                      id="model"
+                      type="text"
+                      placeholder="e.g. Claude, GPT-4"
+                      value={model}
+                      onChange={(e) => setModel(e.target.value)}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="organizationName">Organization Name <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                    <Input
+                      id="organizationName"
+                      type="text"
+                      placeholder="Acme Inc."
+                      value={organizationName}
+                      onChange={(e) => setOrganizationName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="useCase">What will you use Sly for? <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                    <textarea
+                      id="useCase"
+                      placeholder="Tell us about your use case..."
+                      value={useCase}
+                      onChange={(e) => setUseCase(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border rounded-md bg-background resize-none h-20"
+                    />
+                  </div>
+                </>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="referralSource">How did you hear about us? <span className="text-muted-foreground text-xs">(optional)</span></Label>
                 <Input
@@ -259,9 +358,43 @@ function SignUpPageInner() {
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Apply for Access
+                {applicantType === 'agent' ? 'Register Agent' : 'Apply for Access'}
               </Button>
             </form>
+
+            {/* Programmatic access docs for agent applicants */}
+            {applicantType === 'agent' && (
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowApiDocs(!showApiDocs)}
+                  className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showApiDocs ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  Programmatic access
+                </button>
+                {showApiDocs && (
+                  <div className="mt-2 p-3 text-xs font-mono bg-muted rounded-md space-y-2 overflow-x-auto">
+                    <p className="text-muted-foreground font-sans text-xs">For programmatic access, POST to:</p>
+                    <pre className="whitespace-pre-wrap">{`POST ${apiUrl}/v1/auth/beta/apply
+Content-Type: application/json
+
+{
+  "applicantType": "agent",
+  "agentName": "Your Agent",
+  "email": "dev@example.com",
+  "purpose": "What your agent does",
+  "model": "Claude"
+}`}</pre>
+                    <p className="text-muted-foreground font-sans text-xs mt-2">
+                      Also discoverable via A2A:{' '}
+                      <code className="text-xs">GET {apiUrl}/.well-known/agent.json</code>
+                      {' '}&rarr; skill &quot;apply_for_beta&quot;
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="relative my-6">
               <div className="absolute inset-0 flex items-center">

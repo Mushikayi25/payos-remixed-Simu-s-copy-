@@ -35,6 +35,12 @@ export default function NoAccessPage() {
           <Button asChild variant="outline" className="w-full">
             <Link href="/auth/login">Back to login</Link>
           </Button>
+          <p className="text-center text-sm text-muted-foreground">
+            Building an agent?{' '}
+            <Link href="/auth/signup?type=agent" className="text-primary hover:underline">
+              Apply for agent access
+            </Link>
+          </p>
         </CardContent>
       </Card>
     </div>

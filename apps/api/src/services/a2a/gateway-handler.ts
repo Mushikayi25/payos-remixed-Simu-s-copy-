@@ -19,6 +19,7 @@ import {
   handleManageWallet,
   handleCheckTask,
   handleVerifyAgent,
+  handleApplyForBeta,
 } from './onboarding-handler.js';
 
 const DEFAULT_BASE_URL = process.env.API_BASE_URL || 'http://localhost:4000';
@@ -132,6 +133,8 @@ async function handleGatewayMessage(
       return handleCheckTask(request.id, intent.payload || {}, supabase, BASE_URL, authContext);
     case 'verify_agent':
       return handleVerifyAgent(request.id, intent.payload || {}, supabase, BASE_URL, authContext);
+    case 'apply_for_beta':
+      return handleApplyForBeta(request.id, intent.payload || {});
     default:
       // Fallback: return platform capabilities
       return buildCapabilitiesResponse(request.id, BASE_URL);
@@ -139,13 +142,13 @@ async function handleGatewayMessage(
 }
 
 interface Intent {
-  skill: 'find_agent' | 'list_agents' | 'register_agent' | 'update_agent' | 'get_my_status' | 'manage_wallet' | 'check_task' | 'verify_agent' | 'unknown';
+  skill: 'find_agent' | 'list_agents' | 'register_agent' | 'update_agent' | 'get_my_status' | 'manage_wallet' | 'check_task' | 'verify_agent' | 'apply_for_beta' | 'unknown';
   query?: string;
   tags?: string[];
   payload?: Record<string, unknown>;
 }
 
-const ONBOARDING_SKILLS = new Set(['register_agent', 'update_agent', 'get_my_status', 'manage_wallet', 'check_task', 'verify_agent']);
+const ONBOARDING_SKILLS = new Set(['register_agent', 'update_agent', 'get_my_status', 'manage_wallet', 'check_task', 'verify_agent', 'apply_for_beta']);
 
 /**
  * Extract the caller's intent from message parts.
@@ -420,6 +423,11 @@ function buildCapabilitiesResponse(
                     id: 'verify_agent',
                     description: 'Upgrade agent KYA verification tier (agent token = self, API key = admin)',
                     usage: { data: { skill: 'verify_agent', tier: 1 } },
+                  },
+                  {
+                    id: 'apply_for_beta',
+                    description: 'Apply for closed beta access (no auth required)',
+                    usage: { data: { skill: 'apply_for_beta', name: 'My Agent', email: 'dev@example.com' } },
                   },
                 ],
                 platformCardUrl: `${url}/.well-known/agent.json`,
