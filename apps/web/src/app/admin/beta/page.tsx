@@ -701,7 +701,9 @@ function CodesTab({ fetchAdmin }: { fetchAdmin: (path: string, opts?: RequestIni
 // ============================================
 const categoryBadge: Record<string, string> = {
   beta: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-  demo: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+  partner: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  organic: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+  test: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-500',
 };
 
 const statusBadge: Record<string, string> = {
@@ -709,7 +711,7 @@ const statusBadge: Record<string, string> = {
   suspended: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
 };
 
-type TenantFilter = 'all' | 'beta' | 'demo';
+type TenantFilter = 'all' | 'real' | 'beta' | 'test';
 
 function TenantsTab({ fetchAdmin }: { fetchAdmin: (path: string, opts?: RequestInit) => Promise<any> }) {
   const [tenants, setTenants] = useState<any[]>([]);
@@ -758,8 +760,9 @@ function TenantsTab({ fetchAdmin }: { fetchAdmin: (path: string, opts?: RequestI
 
   const filters: { key: TenantFilter; label: string }[] = [
     { key: 'all', label: 'All' },
+    { key: 'real', label: 'Real' },
     { key: 'beta', label: 'Beta' },
-    { key: 'demo', label: 'Demo' },
+    { key: 'test', label: 'Test' },
   ];
 
   return (
@@ -823,7 +826,7 @@ function TenantsTab({ fetchAdmin }: { fetchAdmin: (path: string, opts?: RequestI
                     </button>
                   </td>
                   <td className="p-3">
-                    <span className={`inline-flex items-center px-2 py-0.5 text-xs rounded-full ${categoryBadge[t.category] || categoryBadge.demo}`}>
+                    <span className={`inline-flex items-center px-2 py-0.5 text-xs rounded-full ${categoryBadge[t.category] || categoryBadge.test}`}>
                       {t.category}
                     </span>
                   </td>
@@ -954,7 +957,7 @@ function TenantDetail({
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Category</span>
-                    <span className={`inline-flex items-center px-2 py-0.5 text-xs rounded-full ${categoryBadge[detail.tenant.category] || categoryBadge.demo}`}>
+                    <span className={`inline-flex items-center px-2 py-0.5 text-xs rounded-full ${categoryBadge[detail.tenant.category] || categoryBadge.test}`}>
                       {detail.tenant.category}
                     </span>
                   </div>

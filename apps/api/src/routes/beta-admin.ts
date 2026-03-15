@@ -24,6 +24,27 @@ import { createClient } from '../db/client.js';
 
 const betaAdmin = new Hono();
 
+// Heuristic patterns that indicate a test/dev tenant
+const TEST_PATTERNS = [
+  /test/i,
+  /demo/i,
+  /seed/i,
+  /^frontend/i,
+  /^acme/i,
+  /^competitor/i,
+  /^updated org/i,
+  /^techcorp/i,
+  /^beta llc$/i,
+];
+
+/** Classify a tenant into beta, partner, or test based on onboarded_via + name. */
+function classifyTenant(tenant: { name: string; onboarded_via: string }): string {
+  if (tenant.onboarded_via === 'beta_code') return 'beta';
+  if (tenant.onboarded_via === 'partner_code') return 'partner';
+  if (TEST_PATTERNS.some((p) => p.test(tenant.name))) return 'test';
+  return 'organic';
+}
+
 // ============================================
 // POST /admin/beta/auth/google (public — rate limited, no admin auth)
 // ============================================
@@ -215,9 +236,11 @@ betaAdmin.get('/tenants', async (c) => {
 
   // Apply filter
   if (filter === 'beta') {
-    query = query.eq('onboarded_via', 'beta_code');
-  } else if (filter === 'demo') {
-    query = query.neq('onboarded_via', 'beta_code');
+    query = query.in('onboarded_via', ['beta_code', 'partner_code']);
+  } else if (filter === 'test') {
+    // Nothing here — test filtering is done post-query via name heuristics
+  } else if (filter === 'real') {
+    // Nothing here — real filtering is done post-query via name heuristics
   }
 
   // Apply search
@@ -237,13 +260,21 @@ betaAdmin.get('/tenants', async (c) => {
   const enriched = await Promise.all(
     (tenants || []).map(async (tenant: any) => {
       const usage = await getTenantResourceUsage(tenant.id);
-      const category = tenant.onboarded_via === 'beta_code' ? 'beta' : 'demo';
+      const category = classifyTenant(tenant);
       return { ...tenant, usage, category };
     })
   );
 
+  // Post-query filtering for test/real (needs name heuristics)
+  let filtered = enriched;
+  if (filter === 'test') {
+    filtered = enriched.filter((t: any) => t.category === 'test');
+  } else if (filter === 'real') {
+    filtered = enriched.filter((t: any) => t.category !== 'test');
+  }
+
   return c.json({
-    data: enriched,
+    data: filtered,
     pagination: {
       page,
       limit,
@@ -311,7 +342,7 @@ betaAdmin.get('/tenants/:id', async (c) => {
     0
   );
 
-  const category = tenant.onboarded_via === 'beta_code' ? 'beta' : 'demo';
+  const category = classifyTenant(tenant);
 
   return c.json({
     tenant: { ...tenant, usage, category },
