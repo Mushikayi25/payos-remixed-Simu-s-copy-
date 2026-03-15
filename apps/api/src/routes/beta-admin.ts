@@ -37,10 +37,9 @@ const TEST_PATTERNS = [
   /^beta llc$/i,
 ];
 
-/** Classify a tenant into beta, partner, or test based on onboarded_via + name. */
+/** Classify a tenant based on onboarded_via + name heuristics. */
 function classifyTenant(tenant: { name: string; onboarded_via: string }): string {
-  if (tenant.onboarded_via === 'beta_code') return 'beta';
-  if (tenant.onboarded_via === 'partner_code') return 'partner';
+  if (tenant.onboarded_via === 'beta_code' || tenant.onboarded_via === 'partner_code') return 'beta';
   if (TEST_PATTERNS.some((p) => p.test(tenant.name))) return 'test';
   return 'organic';
 }
@@ -234,14 +233,11 @@ betaAdmin.get('/tenants', async (c) => {
     .select('id, name, status, beta_access_code_id, onboarded_via, max_team_members, max_agents, created_at', { count: 'exact' })
     .order('created_at', { ascending: false });
 
-  // Apply filter
+  // Pre-filter by onboarded_via where possible (beta filter)
   if (filter === 'beta') {
     query = query.in('onboarded_via', ['beta_code', 'partner_code']);
-  } else if (filter === 'test') {
-    // Nothing here — test filtering is done post-query via name heuristics
-  } else if (filter === 'real') {
-    // Nothing here — real filtering is done post-query via name heuristics
   }
+  // test, organic, and all are post-filtered after name heuristics
 
   // Apply search
   if (search) {
@@ -265,12 +261,12 @@ betaAdmin.get('/tenants', async (c) => {
     })
   );
 
-  // Post-query filtering for test/real (needs name heuristics)
+  // Post-query filtering for categories that need name heuristics
   let filtered = enriched;
   if (filter === 'test') {
     filtered = enriched.filter((t: any) => t.category === 'test');
-  } else if (filter === 'real') {
-    filtered = enriched.filter((t: any) => t.category !== 'test');
+  } else if (filter === 'organic') {
+    filtered = enriched.filter((t: any) => t.category === 'organic');
   }
 
   return c.json({

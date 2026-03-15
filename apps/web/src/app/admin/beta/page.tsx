@@ -701,7 +701,6 @@ function CodesTab({ fetchAdmin }: { fetchAdmin: (path: string, opts?: RequestIni
 // ============================================
 const categoryBadge: Record<string, string> = {
   beta: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-  partner: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
   organic: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
   test: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-500',
 };
@@ -711,7 +710,7 @@ const statusBadge: Record<string, string> = {
   suspended: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
 };
 
-type TenantFilter = 'all' | 'real' | 'beta' | 'test';
+type TenantFilter = 'all' | 'beta' | 'organic' | 'test';
 
 function TenantsTab({ fetchAdmin }: { fetchAdmin: (path: string, opts?: RequestInit) => Promise<any> }) {
   const [tenants, setTenants] = useState<any[]>([]);
@@ -760,8 +759,8 @@ function TenantsTab({ fetchAdmin }: { fetchAdmin: (path: string, opts?: RequestI
 
   const filters: { key: TenantFilter; label: string }[] = [
     { key: 'all', label: 'All' },
-    { key: 'real', label: 'Real' },
     { key: 'beta', label: 'Beta' },
+    { key: 'organic', label: 'Organic' },
     { key: 'test', label: 'Test' },
   ];
 
