@@ -471,7 +471,7 @@ betaAdmin.get('/agents', async (c) => {
 
   let query = (supabase.from('agents') as any)
     .select('id, name, description, status, kya_tier, discoverable, endpoint_url, total_volume, total_transactions, wallet_address, created_at, tenant_id', { count: 'exact' })
-    .order('total_transactions', { ascending: false, nullsFirst: false });
+    .order('created_at', { ascending: false });
 
   if (status) {
     query = query.eq('status', status);
@@ -551,21 +551,23 @@ betaAdmin.get('/agents/:id', async (c) => {
   const supabase = createClient();
   const id = c.req.param('id');
 
-  const [agentResult, tenantLookup, skillsResult, walletResult, tasksResult] = await Promise.all([
+  const [agentResult, skillsResult, walletResult, allTasksResult, recentTasksResult] = await Promise.all([
     (supabase.from('agents') as any)
       .select('id, name, description, status, kya_tier, kya_status, kya_verified_at, discoverable, endpoint_url, endpoint_type, endpoint_enabled, total_volume, total_transactions, wallet_address, permissions, metadata, type, x402_enabled, processing_mode, created_at, updated_at, tenant_id, parent_account_id')
       .eq('id', id)
       .single(),
-    // We'll look up tenant name after we have tenant_id
-    null,
     (supabase.from('agent_skills') as any)
-      .select('skill_id, name, description, tags, base_price, currency, total_invocations, total_fees_collected, status, handler_type')
-      .eq('agent_id', id)
-      .order('total_invocations', { ascending: false }),
+      .select('skill_id, name, description, tags, base_price, currency, total_fees_collected, status, handler_type')
+      .eq('agent_id', id),
     (supabase.from('wallets') as any)
       .select('id, balance, currency, wallet_address, network, status, wallet_type, custody_type, provider, created_at')
       .eq('managed_by_agent_id', id)
       .limit(5),
+    // All task states for accurate counts
+    (supabase.from('a2a_tasks') as any)
+      .select('state, processing_duration_ms')
+      .eq('agent_id', id),
+    // Recent tasks for display
     (supabase.from('a2a_tasks') as any)
       .select('id, state, status_message, direction, created_at, updated_at, processing_duration_ms')
       .eq('agent_id', id)
@@ -595,21 +597,30 @@ betaAdmin.get('/agents/:id', async (c) => {
     parentAccount = data;
   }
 
-  // Compute task stats
-  const tasks = tasksResult.data || [];
+  // Compute task stats from all tasks
+  const allTasks = allTasksResult.data || [];
+  const recentTasks = recentTasksResult.data || [];
+  const completedCount = allTasks.filter((t: any) => t.state === 'completed').length;
+
   const taskStats = {
-    total: tasks.length,
-    completed: tasks.filter((t: any) => t.state === 'completed').length,
-    failed: tasks.filter((t: any) => t.state === 'failed').length,
-    working: tasks.filter((t: any) => t.state === 'working').length,
+    total: allTasks.length,
+    completed: completedCount,
+    failed: allTasks.filter((t: any) => t.state === 'failed').length,
+    working: allTasks.filter((t: any) => t.state === 'working').length,
     avgDurationMs: 0,
   };
-  const completedWithDuration = tasks.filter((t: any) => t.state === 'completed' && t.processing_duration_ms);
+  const completedWithDuration = allTasks.filter((t: any) => t.state === 'completed' && t.processing_duration_ms);
   if (completedWithDuration.length) {
     taskStats.avgDurationMs = Math.round(
       completedWithDuration.reduce((s: number, t: any) => s + t.processing_duration_ms, 0) / completedWithDuration.length
     );
   }
+
+  // Use completed task count as invocations (total_invocations column only tracks fee-charged calls)
+  const skills = (skillsResult.data || []).map((s: any) => ({
+    ...s,
+    total_invocations: completedCount,
+  }));
 
   return c.json({
     agent: {
@@ -617,9 +628,9 @@ betaAdmin.get('/agents/:id', async (c) => {
       tenant_name: tenant?.name || 'Unknown',
       parent_account_name: parentAccount?.name || null,
     },
-    skills: skillsResult.data || [],
+    skills,
     wallets: walletResult.data || [],
-    recentTasks: tasks,
+    recentTasks,
     taskStats,
   });
 });

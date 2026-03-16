@@ -25,6 +25,7 @@ import {
   Loader2, CheckCircle2, XCircle, Clock, Users, Bot,
   Key, BarChart3, Plus, Trash2, RefreshCw, Activity,
   Building2, ArrowRightLeft, Waves, Search,
+  ChevronUp, ChevronDown, ArrowUpDown,
 } from 'lucide-react';
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
@@ -699,6 +700,54 @@ function CodesTab({ fetchAdmin }: { fetchAdmin: (path: string, opts?: RequestIni
 }
 
 // ============================================
+// Sortable Table Helpers
+// ============================================
+type SortDir = 'asc' | 'desc';
+interface SortState { key: string; dir: SortDir }
+
+function SortableHeader({ label, sortKey, sort, onSort, align }: {
+  label: string;
+  sortKey: string;
+  sort: SortState;
+  onSort: (key: string) => void;
+  align?: 'left' | 'right';
+}) {
+  const active = sort.key === sortKey;
+  return (
+    <th
+      className={`p-3 font-medium text-gray-500 cursor-pointer select-none hover:text-gray-900 dark:hover:text-gray-200 ${align === 'right' ? 'text-right' : 'text-left'}`}
+      onClick={() => onSort(sortKey)}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {active ? (
+          sort.dir === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+        ) : (
+          <ArrowUpDown className="h-3 w-3 opacity-30" />
+        )}
+      </span>
+    </th>
+  );
+}
+
+function toggleSort(prev: SortState, key: string): SortState {
+  if (prev.key === key) return { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' };
+  return { key, dir: 'desc' };
+}
+
+function sortRows<T>(rows: T[], sort: SortState, accessor: (row: T, key: string) => any): T[] {
+  return [...rows].sort((a, b) => {
+    const va = accessor(a, sort.key);
+    const vb = accessor(b, sort.key);
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    const cmp = typeof va === 'string' ? va.localeCompare(vb) : (va < vb ? -1 : va > vb ? 1 : 0);
+    return sort.dir === 'asc' ? cmp : -cmp;
+  });
+}
+
+// ============================================
 // Tenants Tab
 // ============================================
 const categoryBadge: Record<string, string> = {
@@ -724,6 +773,7 @@ function TenantsTab({ fetchAdmin }: { fetchAdmin: (path: string, opts?: RequestI
   const [editMaxMembers, setEditMaxMembers] = useState('');
   const [editMaxAgents, setEditMaxAgents] = useState('');
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
+  const [sort, setSort] = useState<SortState>({ key: 'created_at', dir: 'desc' });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -805,17 +855,27 @@ function TenantsTab({ fetchAdmin }: { fetchAdmin: (path: string, opts?: RequestI
             <thead className="bg-gray-50 dark:bg-gray-900">
               <tr>
                 <th className="text-left p-3 font-medium text-gray-500">ID</th>
-                <th className="text-left p-3 font-medium text-gray-500">Tenant</th>
-                <th className="text-left p-3 font-medium text-gray-500">Category</th>
-                <th className="text-left p-3 font-medium text-gray-500">Status</th>
-                <th className="text-left p-3 font-medium text-gray-500">Team Members</th>
-                <th className="text-left p-3 font-medium text-gray-500">Agents</th>
-                <th className="text-left p-3 font-medium text-gray-500">Created</th>
+                <SortableHeader label="Tenant" sortKey="name" sort={sort} onSort={(k) => setSort(toggleSort(sort, k))} />
+                <SortableHeader label="Category" sortKey="category" sort={sort} onSort={(k) => setSort(toggleSort(sort, k))} />
+                <SortableHeader label="Status" sortKey="status" sort={sort} onSort={(k) => setSort(toggleSort(sort, k))} />
+                <SortableHeader label="Team Members" sortKey="teamMembers" sort={sort} onSort={(k) => setSort(toggleSort(sort, k))} />
+                <SortableHeader label="Agents" sortKey="agents" sort={sort} onSort={(k) => setSort(toggleSort(sort, k))} />
+                <SortableHeader label="Created" sortKey="created_at" sort={sort} onSort={(k) => setSort(toggleSort(sort, k))} />
                 <th className="text-right p-3 font-medium text-gray-500">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-              {tenants.map((t) => (
+              {sortRows(tenants, sort, (t: any, key: string) => {
+                switch (key) {
+                  case 'name': return t.name?.toLowerCase();
+                  case 'category': return t.category;
+                  case 'status': return t.status;
+                  case 'teamMembers': return t.usage?.teamMembers?.current || 0;
+                  case 'agents': return t.usage?.agents?.current || 0;
+                  case 'created_at': return t.created_at;
+                  default: return t[key];
+                }
+              }).map((t) => (
                 <tr key={t.id}>
                   <td className="p-3 font-mono text-xs text-gray-500">{t.id.slice(0, 8)}</td>
                   <td className="p-3">
@@ -1106,6 +1166,7 @@ function AgentsTab({ fetchAdmin }: { fetchAdmin: (path: string, opts?: RequestIn
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [sort, setSort] = useState<SortState>({ key: 'tasks_completed', dir: 'desc' });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1170,17 +1231,28 @@ function AgentsTab({ fetchAdmin }: { fetchAdmin: (path: string, opts?: RequestIn
             <thead className="bg-gray-50 dark:bg-gray-900">
               <tr>
                 <th className="text-left p-3 font-medium text-gray-500 w-8">#</th>
-                <th className="text-left p-3 font-medium text-gray-500">Agent</th>
-                <th className="text-left p-3 font-medium text-gray-500">Tenant</th>
-                <th className="text-left p-3 font-medium text-gray-500">Status</th>
-                <th className="text-left p-3 font-medium text-gray-500">KYA</th>
-                <th className="text-right p-3 font-medium text-gray-500">Tasks</th>
-                <th className="text-right p-3 font-medium text-gray-500">Success</th>
-                <th className="text-right p-3 font-medium text-gray-500">Volume</th>
+                <SortableHeader label="Agent" sortKey="name" sort={sort} onSort={(k) => setSort(toggleSort(sort, k))} />
+                <SortableHeader label="Tenant" sortKey="tenant_name" sort={sort} onSort={(k) => setSort(toggleSort(sort, k))} />
+                <SortableHeader label="Status" sortKey="status" sort={sort} onSort={(k) => setSort(toggleSort(sort, k))} />
+                <SortableHeader label="KYA" sortKey="kya_tier" sort={sort} onSort={(k) => setSort(toggleSort(sort, k))} />
+                <SortableHeader label="Tasks" sortKey="tasks_completed" sort={sort} onSort={(k) => setSort(toggleSort(sort, k))} align="right" />
+                <SortableHeader label="Success" sortKey="success_rate" sort={sort} onSort={(k) => setSort(toggleSort(sort, k))} align="right" />
+                <SortableHeader label="Volume" sortKey="total_volume" sort={sort} onSort={(k) => setSort(toggleSort(sort, k))} align="right" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-              {agents.map((a, i) => (
+              {sortRows(agents, sort, (a: any, key: string) => {
+                switch (key) {
+                  case 'name': return a.name?.toLowerCase();
+                  case 'tenant_name': return a.tenant_name?.toLowerCase();
+                  case 'status': return a.status;
+                  case 'kya_tier': return a.kya_tier;
+                  case 'tasks_completed': return a.tasks?.completed || 0;
+                  case 'success_rate': return a.success_rate || 0;
+                  case 'total_volume': return Number(a.total_volume) || 0;
+                  default: return a[key];
+                }
+              }).map((a, i) => (
                 <tr key={a.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
                   <td className="p-3 text-gray-400 font-mono text-xs">{i + 1}</td>
                   <td className="p-3">
@@ -1248,244 +1320,202 @@ function AgentDetail({ agentId, fetchAdmin, onClose }: {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await fetchAdmin(`/agents/${agentId}`);
-        setDetail(data);
-      } catch (err: any) {
-        setError(err.message);
-      }
-      setLoading(false);
-    })();
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetchAdmin(`/agents/${agentId}`)
+      .then((data) => { if (!cancelled) setDetail(data); })
+      .catch((err: any) => { if (!cancelled) setError(err.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [agentId, fetchAdmin]);
 
-  if (loading) {
-    return (
-      <Card className="mt-4">
-        <CardContent className="flex justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (error || !detail) {
-    return (
-      <Card className="mt-4">
-        <CardContent className="py-6">
-          <p className="text-sm text-red-500">{error || 'Failed to load agent'}</p>
-          <Button variant="outline" size="sm" className="mt-2" onClick={onClose}>Close</Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const { agent, skills, wallets, recentTasks, taskStats } = detail;
+  const agent = detail?.agent;
+  const skills = detail?.skills || [];
+  const wallets = detail?.wallets || [];
+  const recentTasks = detail?.recentTasks || [];
+  const taskStats = detail?.taskStats || {};
 
   return (
-    <Card className="mt-4">
-      <CardHeader className="flex flex-row items-start justify-between">
-        <div>
-          <CardTitle className="text-lg flex items-center gap-2">
-            {agent.name}
-            <span className={`inline-flex items-center px-2 py-0.5 text-xs rounded-full ${statusBadge[agent.status] || statusBadge.active}`}>
-              {agent.status}
-            </span>
-            <span className={`inline-flex items-center px-2 py-0.5 text-xs rounded-full ${kyaBadge[agent.kya_tier] || kyaBadge[0]}`}>
-              KYA {agent.kya_tier}
-            </span>
-          </CardTitle>
-          <p className="text-sm text-gray-500 mt-1">{agent.description || 'No description'}</p>
-        </div>
-        <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Agent Info Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-          <div>
-            <span className="text-gray-500">ID</span>
-            <p className="font-mono text-xs mt-0.5">{agent.id.slice(0, 12)}...</p>
-          </div>
-          <div>
-            <span className="text-gray-500">Tenant</span>
-            <p className="mt-0.5">{agent.tenant_name}</p>
-          </div>
-          <div>
-            <span className="text-gray-500">Parent Account</span>
-            <p className="mt-0.5">{agent.parent_account_name || '—'}</p>
-          </div>
-          <div>
-            <span className="text-gray-500">Type</span>
-            <p className="mt-0.5">{agent.type || 'standard'}</p>
-          </div>
-          <div>
-            <span className="text-gray-500">Discoverable</span>
-            <p className="mt-0.5">{agent.discoverable ? 'Yes' : 'No'}</p>
-          </div>
-          <div>
-            <span className="text-gray-500">x402 Enabled</span>
-            <p className="mt-0.5">{agent.x402_enabled ? 'Yes' : 'No'}</p>
-          </div>
-          <div>
-            <span className="text-gray-500">Endpoint</span>
-            <p className="font-mono text-xs mt-0.5 truncate max-w-[200px]" title={agent.endpoint_url || ''}>
-              {agent.endpoint_url || '—'}
-            </p>
-          </div>
-          <div>
-            <span className="text-gray-500">Created</span>
-            <p className="mt-0.5">{new Date(agent.created_at).toLocaleDateString()}</p>
-          </div>
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={onClose}>
+      <div
+        className="w-full max-w-lg bg-white dark:bg-gray-950 h-full overflow-y-auto shadow-xl border-l border-gray-200 dark:border-gray-800"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sticky top-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 p-4 flex items-center justify-between z-10">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Agent Detail</h2>
+          <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
         </div>
 
-        {/* Task Stats */}
-        <div>
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Task Stats</h3>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            {[
-              { label: 'Total', value: taskStats.total, color: 'text-gray-900 dark:text-white' },
-              { label: 'Completed', value: taskStats.completed, color: 'text-green-600' },
-              { label: 'Failed', value: taskStats.failed, color: 'text-red-500' },
-              { label: 'Working', value: taskStats.working, color: 'text-blue-500' },
-              { label: 'Avg Duration', value: taskStats.avgDurationMs ? `${taskStats.avgDurationMs}ms` : '—', color: 'text-gray-600' },
-            ].map((s) => (
-              <div key={s.label} className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 text-center">
-                <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
-                <div className="text-xs text-gray-500">{s.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <div className="p-4 space-y-6">
+          {loading && (
+            <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
+          )}
 
-        {/* Skills */}
-        {skills.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
-              Skills ({skills.length})
-            </h3>
-            <div className="bg-gray-50 dark:bg-gray-900 rounded-lg overflow-hidden">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-gray-200 dark:border-gray-800">
-                    <th className="text-left p-2 font-medium text-gray-500">Skill</th>
-                    <th className="text-left p-2 font-medium text-gray-500">Tags</th>
-                    <th className="text-right p-2 font-medium text-gray-500">Price</th>
-                    <th className="text-right p-2 font-medium text-gray-500">Invocations</th>
-                    <th className="text-right p-2 font-medium text-gray-500">Revenue</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
-                  {skills.map((s: any) => (
-                    <tr key={s.skill_id}>
-                      <td className="p-2">
-                        <span className="font-medium">{s.name}</span>
-                        <span className="text-gray-400 ml-1">({s.skill_id})</span>
-                      </td>
-                      <td className="p-2">
-                        {(s.tags || []).map((t: string) => (
-                          <span key={t} className="inline-block bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded px-1.5 py-0.5 mr-1 text-[10px]">
-                            {t}
-                          </span>
-                        ))}
-                      </td>
-                      <td className="p-2 text-right font-mono">
-                        {Number(s.base_price) > 0 ? `${s.base_price} ${s.currency}` : 'Free'}
-                      </td>
-                      <td className="p-2 text-right font-mono">{s.total_invocations || 0}</td>
-                      <td className="p-2 text-right font-mono">
-                        {Number(s.total_fees_collected) > 0 ? `${s.total_fees_collected} ${s.currency}` : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+          {error && <p className="text-sm text-red-500">{error}</p>}
 
-        {/* Wallets */}
-        {wallets.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
-              Wallets ({wallets.length})
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {wallets.map((w: any) => (
-                <div key={w.id} className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 text-sm">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-medium">{w.currency}</span>
-                    <span className={`px-2 py-0.5 text-xs rounded-full ${statusBadge[w.status] || statusBadge.active}`}>
-                      {w.status}
+          {agent && (
+            <>
+              {/* Agent Info */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    {agent.name}
+                    <span className={`inline-flex items-center px-2 py-0.5 text-xs rounded-full ${statusBadge[agent.status] || statusBadge.active}`}>
+                      {agent.status}
                     </span>
-                  </div>
-                  <div className="text-xl font-bold">${Number(w.balance || 0).toLocaleString()}</div>
-                  <div className="text-xs text-gray-500 mt-1 font-mono truncate">{w.wallet_address || '—'}</div>
-                  <div className="text-xs text-gray-400 mt-0.5">{w.wallet_type} / {w.custody_type} / {w.provider || 'none'}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Recent Tasks */}
-        {recentTasks.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
-              Recent Tasks (last 20)
-            </h3>
-            <div className="bg-gray-50 dark:bg-gray-900 rounded-lg overflow-hidden">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-gray-200 dark:border-gray-800">
-                    <th className="text-left p-2 font-medium text-gray-500">ID</th>
-                    <th className="text-left p-2 font-medium text-gray-500">State</th>
-                    <th className="text-left p-2 font-medium text-gray-500">Direction</th>
-                    <th className="text-right p-2 font-medium text-gray-500">Duration</th>
-                    <th className="text-right p-2 font-medium text-gray-500">Created</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
-                  {recentTasks.map((t: any) => (
-                    <tr key={t.id}>
-                      <td className="p-2 font-mono text-gray-500">{t.id.slice(0, 8)}</td>
-                      <td className="p-2">
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] ${
-                          t.state === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                          t.state === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                          t.state === 'working' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                          'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
-                        }`}>
-                          {t.state}
-                        </span>
-                      </td>
-                      <td className="p-2 text-gray-500">{t.direction || '—'}</td>
-                      <td className="p-2 text-right font-mono text-gray-500">
-                        {t.processing_duration_ms ? `${t.processing_duration_ms}ms` : '—'}
-                      </td>
-                      <td className="p-2 text-right text-gray-500">
-                        {new Date(t.created_at).toLocaleString()}
-                      </td>
-                    </tr>
+                    <span className={`inline-flex items-center px-2 py-0.5 text-xs rounded-full ${kyaBadge[agent.kya_tier] || kyaBadge[0]}`}>
+                      KYA {agent.kya_tier}
+                    </span>
+                  </CardTitle>
+                  {agent.description && (
+                    <p className="text-sm text-gray-500">{agent.description}</p>
+                  )}
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  {[
+                    { label: 'ID', value: agent.id, mono: true },
+                    { label: 'Tenant', value: agent.tenant_name },
+                    { label: 'Parent Account', value: agent.parent_account_name || '—' },
+                    { label: 'Type', value: agent.type || 'standard' },
+                    { label: 'Discoverable', value: agent.discoverable ? 'Yes' : 'No' },
+                    { label: 'x402 Enabled', value: agent.x402_enabled ? 'Yes' : 'No' },
+                    { label: 'Endpoint', value: agent.endpoint_url || '—', mono: true },
+                    { label: 'Created', value: new Date(agent.created_at).toLocaleString() },
+                  ].map(({ label, value, mono }) => (
+                    <div key={label} className="flex justify-between">
+                      <span className="text-gray-500">{label}</span>
+                      <span className={`text-gray-900 dark:text-white text-right max-w-[60%] truncate ${mono ? 'font-mono text-xs select-all' : ''}`} title={String(value)}>
+                        {value}
+                      </span>
+                    </div>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+                </CardContent>
+              </Card>
 
-        {/* Permissions */}
-        {agent.permissions && Object.keys(agent.permissions).length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Permissions</h3>
-            <pre className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 text-xs font-mono overflow-x-auto">
-              {JSON.stringify(agent.permissions, null, 2)}
-            </pre>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+              {/* Task Stats */}
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: 'Completed', value: taskStats.completed || 0, color: 'text-green-600 dark:text-green-400' },
+                  { label: 'Failed', value: taskStats.failed || 0, color: 'text-red-500' },
+                  { label: 'Total', value: taskStats.total || 0, color: 'text-gray-900 dark:text-white' },
+                  { label: 'Working', value: taskStats.working || 0, color: 'text-blue-500' },
+                  { label: 'Success Rate', value: taskStats.total > 0 ? `${Math.round((taskStats.completed / taskStats.total) * 100)}%` : '—', color: 'text-gray-900 dark:text-white' },
+                  { label: 'Avg Duration', value: taskStats.avgDurationMs ? `${taskStats.avgDurationMs}ms` : '—', color: 'text-gray-600' },
+                ].map((s) => (
+                  <Card key={s.label}>
+                    <CardContent className="pt-3 pb-2 px-3 text-center">
+                      <div className={`text-lg font-bold ${s.color}`}>{s.value}</div>
+                      <div className="text-xs text-gray-500">{s.label}</div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {/* Skills */}
+              {skills.length > 0 && (
+                <Card>
+                  <CardHeader><CardTitle className="text-base">Skills ({skills.length})</CardTitle></CardHeader>
+                  <CardContent className="space-y-2">
+                    {skills.map((s: any) => (
+                      <div key={s.skill_id} className="bg-gray-50 dark:bg-gray-900 rounded-lg p-2.5 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">{s.name}</span>
+                          <span className="text-xs font-mono text-gray-500">
+                            {Number(s.base_price) > 0 ? `${s.base_price} ${s.currency}` : 'Free'}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">{s.skill_id}</div>
+                        {(s.tags || []).length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {s.tags.map((t: string) => (
+                              <span key={t} className="inline-block bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded px-1.5 py-0.5 text-[10px]">
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex gap-4 mt-1.5 text-xs text-gray-400">
+                          <span>{s.total_invocations || 0} invocations</span>
+                          {Number(s.total_fees_collected) > 0 && (
+                            <span>{s.total_fees_collected} {s.currency} earned</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Wallets */}
+              {wallets.length > 0 && (
+                <Card>
+                  <CardHeader><CardTitle className="text-base">Wallets ({wallets.length})</CardTitle></CardHeader>
+                  <CardContent className="space-y-2">
+                    {wallets.map((w: any) => (
+                      <div key={w.id} className="bg-gray-50 dark:bg-gray-900 rounded-lg p-2.5 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">{w.currency}</span>
+                          <span className={`px-2 py-0.5 text-xs rounded-full ${statusBadge[w.status] || statusBadge.active}`}>
+                            {w.status}
+                          </span>
+                        </div>
+                        <div className="text-lg font-bold mt-1">${Number(w.balance || 0).toLocaleString()}</div>
+                        <div className="text-xs text-gray-500 mt-1 font-mono truncate">{w.wallet_address || '—'}</div>
+                        <div className="text-xs text-gray-400 mt-0.5">{w.wallet_type} / {w.custody_type} / {w.provider || 'none'}</div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Recent Tasks */}
+              {recentTasks.length > 0 && (
+                <Card>
+                  <CardHeader><CardTitle className="text-base">Recent Tasks</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="space-y-1.5">
+                      {recentTasks.map((t: any) => (
+                        <div key={t.id} className="flex items-center justify-between text-xs py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-gray-400">{t.id.slice(0, 8)}</span>
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] ${
+                              t.state === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                              t.state === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                              t.state === 'working' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                              'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                            }`}>
+                              {t.state}
+                            </span>
+                            {t.direction && <span className="text-gray-400">{t.direction}</span>}
+                          </div>
+                          <div className="flex items-center gap-3 text-gray-400">
+                            {t.processing_duration_ms && <span className="font-mono">{t.processing_duration_ms}ms</span>}
+                            <span>{new Date(t.created_at).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Permissions */}
+              {agent.permissions && Object.keys(agent.permissions).length > 0 && (
+                <Card>
+                  <CardHeader><CardTitle className="text-base">Permissions</CardTitle></CardHeader>
+                  <CardContent>
+                    <pre className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 text-xs font-mono overflow-x-auto">
+                      {JSON.stringify(agent.permissions, null, 2)}
+                    </pre>
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
