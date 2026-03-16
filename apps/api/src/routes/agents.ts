@@ -550,7 +550,7 @@ agents.get('/:id', async (c) => {
   if (error || !data) {
     throw new NotFoundError('Agent', id);
   }
-  
+
   const agent = mapAgentFromDb(data);
   if (data.accounts) {
     agent.parentAccount = {
@@ -560,8 +560,21 @@ agents.get('/:id', async (c) => {
       verificationTier: data.accounts.verification_tier,
     };
   }
-  
-  return c.json({ data: agent });
+
+  // Fetch active skills for this agent
+  const { data: skills } = await supabase
+    .from('agent_skills')
+    .select('skill_id, name, description, input_modes, output_modes, tags, base_price, currency')
+    .eq('agent_id', id)
+    .eq('tenant_id', ctx.tenantId)
+    .eq('status', 'active')
+    .order('created_at');
+
+  // Build A2A card URL from request context
+  const baseUrl = c.req.url.split('/v1/')[0];
+  const a2aCardUrl = `${baseUrl}/a2a/agents/${id}/card`;
+
+  return c.json({ data: { ...agent, skills: skills || [], a2aCardUrl } });
 });
 
 // ============================================

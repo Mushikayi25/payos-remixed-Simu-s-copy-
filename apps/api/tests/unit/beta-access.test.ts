@@ -947,7 +947,7 @@ describe('Platform Admin Middleware', () => {
     delete process.env.PLATFORM_ADMIN_API_KEY;
 
     const mockC = {
-      req: { header: vi.fn().mockReturnValue(undefined) },
+      req: { header: vi.fn().mockReturnValue('Bearer some-key') },
       json: vi.fn().mockReturnValue('response'),
       set: vi.fn(),
     };
