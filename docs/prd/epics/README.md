@@ -105,6 +105,7 @@ Every story must meet these criteria before completion:
 - [Epic 57: Google A2A Protocol](./epic-57-google-a2a-protocol.md) 🤝 ✅ - Google A2A protocol for agent discovery, communication, and paid task execution
 - [Epic 58: A2A Task Processor Worker](./epic-58-a2a-task-processor.md) ⚙️ ✅ - Background worker for processing A2A tasks with tool registry, payment gating, custom tools, audit trail
 - [Epic 60: A2A Agent Onboarding Skills](./epic-60-a2a-agent-onboarding-skills.md) 🎫 ✅ - Register, update, and inspect agents via A2A message/send
+- [Epic 68: Flexible Skill Pricing](./epic-68-flexible-skill-pricing.md) 💰 - Per-skill pricing: KYA-tiered rates, per-caller overrides, dynamic quotes, negotiated pricing via A2A
 
 ### Agent Contracting Governance ⭐ NEW
 - [Epic 18: Agent Wallets & Contract Policies](./epic-18-agent-wallets-contract-policies.md) 🤖 - Contract policy engine, per-counterparty exposure, negotiation guardrails (expanded from 23→35 pts)
@@ -127,6 +128,7 @@ Every story must meet these criteria before completion:
 - [Epic 39: Open Issuance](./epic-39-open-issuance.md) - Custom stablecoin support
 
 ### Production Hardening (P2/P3)
+- [Epic 67: Production Environment Mode](./epic-67-production-environment-mode.md) 🛡️ - Separate deployments (sandbox/production), env column tagging, activation guardrails
 - [Epic 44: Observability & Monitoring](./epic-44-observability.md) 📊 - Monitoring, alerting, SLAs
 - [Epic 45: Webhook Infrastructure](./epic-45-webhook-infrastructure.md) 🔔 - Guaranteed delivery, DLQ
 - [Epic 46: Multi-Region & Disaster Recovery](./epic-46-disaster-recovery.md) 🌍 - Scale & resilience
@@ -187,15 +189,17 @@ Strategic explorations before committing to implementation:
 | Epic 63: External Reputation Bridge | P0 | 25 | Unified trust score aggregation |
 | Epic 64: OpenClaw Governance Skill | P1 | 10 | ClawHub skill for governed contracting |
 | Epic 66: Email Notification System | P1 | 35 | Tier 1 done (10 emails), preferences + unsubscribe remaining |
+| Epic 68: Flexible Skill Pricing | P1 | 52 | KYA-tiered, per-caller, dynamic, negotiated pricing |
 
 ### Planned (P0/P1) 📋
 
 | Epic | Priority | Points | Notes |
 |------|----------|--------|-------|
+| Epic 67: Production Environment Mode | P0 | 88 | Separate deployments, env column tagging |
 | Epic 32: Tool Discovery | P0 | 11 | |
 | Epic 33: Metadata Schema | P1 | 11 | |
 | Epic 34: Transaction Decomp | P1 | 14 | |
-| **Subtotal P0/P1** | | **~336** | Including Epic 48-52, 41, 29 |
+| **Subtotal P0/P1** | | **~424** | Including Epic 67 (88 pts), 48-52, 41, 29 |
 
 ### Planned (P2) 📋
 
@@ -221,15 +225,34 @@ Strategic explorations before committing to implementation:
 ### Points Summary
 
 - **Completed:** ~992 points
-- **Current Focus:** ~307 points (58, 55, 29, 41)
-- **P0/P1 Planned:** ~36 points
+- **Current Focus:** ~359 points (58, 55, 29, 41, 68)
+- **P0/P1 Planned:** ~124 points (including Epic 67 at 88 pts)
 - **P2 Planned:** ~153 points
 - **P3 Future:** ~205 points
-- **Total Defined:** ~1,584 points
+- **Total Defined:** ~1,724 points
 
 ---
 
 ## Recent Changes
+
+### March 16, 2026
+- **Epic 68: Flexible Skill Pricing** — NEW (52 points, P1)
+  - Four pricing models: KYA-tiered rates, per-caller overrides, dynamic quotes, negotiated pricing
+  - Price resolution layer between skill lookup and settlement mandate creation
+  - Agent Card `urn:a2a:ext:pricing` extension for pricing model discovery
+  - Management API for pricing configuration and caller-specific overrides
+  - 11 stories across 5 phases: Foundation (13 pts), Task Processor Integration (10 pts), Dynamic & Negotiated (13 pts), Management API (8 pts), Testing & Docs (8 pts)
+  - Linear issues: SLY-443 through SLY-453
+- **Epic 67: Production Environment Mode** — REVISED (88 points, P0, was 100)
+  - Architecture changed from column+RLS on single server to **separate deployments** (two Railway services)
+  - Root cause: service role key bypasses all RLS, single EVM/Circle key per process, global blockchain routing
+  - 22 stories across 5 phases: Foundation (24 pts), Production Guardrails (16 pts), Infrastructure/DevOps (16 pts), UI Integration (18 pts), Migration & Rollout (14 pts)
+  - 8 Linear issues canceled, 12 updated, 10 new (SLY-433 through SLY-442)
+
+### March 15, 2026
+- **Epic 67: Production Environment Mode** — Original plan (100 points, superseded by March 16 revision)
+  - Column + RLS approach (abandoned after architecture review)
+  - Linear stories: SLY-413 through SLY-432
 
 ### March 12, 2026
 - **Epic 58: A2A Task Processor** — Marked COMPLETE ✅ (17/18 stories, ~109/119 points)
@@ -460,4 +483,4 @@ Sly supports **FIVE** agentic payment and communication protocols:
 
 ---
 
-*Last updated: March 11, 2026*
+*Last updated: March 16, 2026*
