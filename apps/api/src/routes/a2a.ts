@@ -539,10 +539,7 @@ a2aPublicRouter.post('/:agentId/callback', async (c) => {
     }
   }
 
-  // Transition task state
-  await taskService.updateTaskState(taskId, newState, body.statusMessage || `Agent ${newState}`);
-
-  // Resolve settlement mandate if one exists for this task
+  // Read task metadata BEFORE state transition (needed for gate check)
   const { data: taskWithMeta } = await supabase
     .from('a2a_tasks')
     .select('metadata')
@@ -550,6 +547,27 @@ a2aPublicRouter.post('/:agentId/callback', async (c) => {
     .eq('tenant_id', agent.tenant_id)
     .single();
   const taskMetadata = (taskWithMeta as any)?.metadata || {};
+
+  // Check acceptance gate for completed tasks with settlement mandates
+  if (taskMetadata.settlementMandateId && newState === 'completed') {
+    const { A2ATaskProcessor } = await import('../services/a2a/task-processor.js');
+    const processor = new A2ATaskProcessor(supabase, agent.tenant_id);
+    const gateEngaged = await processor.checkAcceptanceGate(
+      taskId,
+      taskMetadata.settlementMandateId,
+      'completed',
+    );
+    if (gateEngaged) {
+      // Gate engaged — task is now input-required, skip settlement
+      const updated = await taskService.getTask(taskId);
+      return c.json({ ok: true, taskId, state: 'input-required', acceptance_review: true, task: updated });
+    }
+  }
+
+  // Transition task state
+  await taskService.updateTaskState(taskId, newState, body.statusMessage || `Agent ${newState}`);
+
+  // Resolve settlement mandate if one exists (no gate or failed state)
   if (taskMetadata.settlementMandateId) {
     const { A2ATaskProcessor } = await import('../services/a2a/task-processor.js');
     const processor = new A2ATaskProcessor(supabase, agent.tenant_id);
@@ -1331,7 +1349,7 @@ a2aRouter.post('/tasks/:taskId/respond', async (c) => {
   // Verify task exists and is in input-required state
   const { data: task, error: fetchError } = await supabase
     .from('a2a_tasks')
-    .select('id, state, tenant_id')
+    .select('id, state, tenant_id, metadata, agent_id, client_agent_id')
     .eq('id', taskId)
     .eq('tenant_id', ctx.tenantId)
     .single();
@@ -1346,6 +1364,150 @@ a2aRouter.post('/tasks/:taskId/respond', async (c) => {
     }, 400);
   }
 
+  const taskService = new A2ATaskService(supabase, ctx.tenantId);
+  const taskMeta = (task as any).metadata || {};
+  const inputContext = taskMeta.input_required_context;
+
+  // --- Epic 69: Result Review Branch ---
+  if (inputContext?.reason_code === 'result_review') {
+    const action = body.action;
+    if (!action || !['accept', 'reject'].includes(action)) {
+      return c.json({ error: 'action must be "accept" or "reject" for result review' }, 400);
+    }
+
+    const mandateId = inputContext.details?.mandate_id || taskMeta.settlementMandateId;
+    if (!mandateId) {
+      return c.json({ error: 'No settlement mandate found for this task' }, 500);
+    }
+
+    // Parse optional feedback
+    const satisfaction = body.satisfaction;
+    const score = body.score;
+    const comment = body.comment;
+    const settlementAmount = body.settlement_amount;
+
+    // Validate feedback fields
+    if (satisfaction && !['excellent', 'acceptable', 'partial', 'unacceptable'].includes(satisfaction)) {
+      return c.json({ error: 'satisfaction must be excellent, acceptable, partial, or unacceptable' }, 400);
+    }
+    if (score !== undefined && score !== null && (typeof score !== 'number' || score < 0 || score > 100)) {
+      return c.json({ error: 'score must be a number between 0 and 100' }, 400);
+    }
+
+    const { A2ATaskProcessor } = await import('../services/a2a/task-processor.js');
+    const processor = new A2ATaskProcessor(supabase, ctx.tenantId);
+
+    // Handle partial settlement
+    let overrideAmount: number | undefined;
+    if (action === 'accept' && settlementAmount !== undefined && settlementAmount !== null) {
+      // Read mandate to validate amount
+      const { data: mandate } = await supabase
+        .from('ap2_mandates')
+        .select('authorized_amount, metadata')
+        .eq('mandate_id', mandateId)
+        .eq('tenant_id', ctx.tenantId)
+        .single();
+
+      if (!mandate) {
+        return c.json({ error: 'Mandate not found' }, 404);
+      }
+
+      const originalAmount = Number(mandate.authorized_amount);
+      if (typeof settlementAmount !== 'number' || settlementAmount <= 0 || settlementAmount > originalAmount) {
+        return c.json({ error: `settlement_amount must be between 0 and ${originalAmount}` }, 400);
+      }
+
+      // Check if provider skill allows partial settlement
+      const skillId = taskMeta.skillId;
+      if (skillId) {
+        const { data: skill } = await supabase
+          .from('agent_skills')
+          .select('metadata')
+          .eq('agent_id', (task as any).agent_id)
+          .eq('skill_id', skillId)
+          .eq('tenant_id', ctx.tenantId)
+          .maybeSingle();
+
+        if (!skill?.metadata?.allows_partial_settlement) {
+          return c.json({ error: 'Provider skill does not allow partial settlement' }, 400);
+        }
+      }
+
+      overrideAmount = settlementAmount;
+    }
+
+    // Resolve mandate
+    if (action === 'accept') {
+      await processor.resolveSettlementMandate(taskId, mandateId, 'completed', overrideAmount);
+      await taskService.updateTaskState(taskId, 'completed', 'Accepted by caller');
+    } else {
+      await processor.resolveSettlementMandate(taskId, mandateId, 'failed');
+      await taskService.updateTaskState(taskId, 'failed', 'Rejected by caller');
+    }
+
+    // Store feedback if provided
+    const originalAmount = inputContext.details?.amount;
+    if (satisfaction || score !== undefined || comment) {
+      await supabase.from('a2a_task_feedback').insert({
+        tenant_id: ctx.tenantId,
+        task_id: taskId,
+        caller_agent_id: (task as any).client_agent_id,
+        provider_agent_id: (task as any).agent_id,
+        skill_id: taskMeta.skillId || null,
+        action,
+        satisfaction: satisfaction || null,
+        score: score ?? null,
+        comment: comment || null,
+        mandate_id: mandateId,
+        original_amount: originalAmount ?? null,
+        settlement_amount: overrideAmount ?? originalAmount ?? null,
+        currency: 'USDC',
+      });
+
+      // Emit feedback audit event
+      const { taskEventBus: feedbackBus } = await import('../services/a2a/task-event-bus.js');
+      const auditActorType = (ctx.actorType === 'api_key' ? 'user' : ctx.actorType) as 'system' | 'agent' | 'user' | 'worker';
+      feedbackBus.emitTask(taskId, {
+        type: 'feedback',
+        taskId,
+        data: { satisfaction, score, comment, action },
+        timestamp: new Date().toISOString(),
+      }, {
+        tenantId: ctx.tenantId,
+        agentId: (task as any).agent_id,
+        actorType: auditActorType,
+      });
+    }
+
+    // Emit acceptance audit event (enriched with mandate context)
+    const { taskEventBus } = await import('../services/a2a/task-event-bus.js');
+    const acceptActorType = (ctx.actorType === 'api_key' ? 'user' : ctx.actorType) as 'system' | 'agent' | 'user' | 'worker';
+    taskEventBus.emitTask(taskId, {
+      type: 'acceptance',
+      taskId,
+      data: {
+        action,
+        satisfaction,
+        score,
+        comment,
+        mandateId,
+        originalAmount,
+        settlementAmount: overrideAmount ?? originalAmount,
+        partial: overrideAmount !== undefined,
+      },
+      timestamp: new Date().toISOString(),
+    }, {
+      tenantId: ctx.tenantId,
+      agentId: (task as any).agent_id,
+      actorType: acceptActorType,
+    });
+
+    const updated = await taskService.getTask(taskId);
+    return c.json({ data: updated });
+  }
+
+  // --- Standard input-required flow (non-review) ---
+
   // Validate response body — accept multiple formats:
   // { parts: [...] }, { message: { parts: [...] } }, { message: "text" }, { text: "text" }
   let parts = body.parts || body.message?.parts;
@@ -1357,8 +1519,6 @@ a2aRouter.post('/tasks/:taskId/respond', async (c) => {
       return c.json({ error: 'message.parts, parts, message (string), or text is required' }, 400);
     }
   }
-
-  const taskService = new A2ATaskService(supabase, ctx.tenantId);
 
   // Add the human response as a user message
   await taskService.addMessage(
@@ -1560,8 +1720,8 @@ a2aRouter.get('/sessions/:contextId', async (c) => {
 
   const taskIds = taskRows.map((r: any) => r.id);
 
-  // 2. Batch-fetch messages, artifacts, and linked transfers in parallel
-  const [messagesResult, artifactsResult, transfersResult] = await Promise.all([
+  // 2. Batch-fetch messages, artifacts, transfers, and audit events in parallel
+  const [messagesResult, artifactsResult, transfersResult, eventsResult] = await Promise.all([
     supabase
       .from('a2a_messages')
       .select('id, task_id, role, parts, created_at')
@@ -1583,16 +1743,39 @@ a2aRouter.get('/sessions/:contextId', async (c) => {
         .in('id', transferIds)
         .eq('tenant_id', ctx.tenantId);
     })(),
+    supabase
+      .from('a2a_audit_events')
+      .select('id, task_id, event_type, from_state, to_state, actor_type, actor_id, data, duration_ms, created_at')
+      .in('task_id', taskIds)
+      .eq('tenant_id', ctx.tenantId)
+      .order('created_at', { ascending: true }),
   ]);
 
   const messages = messagesResult.data || [];
   const artifacts = artifactsResult.data || [];
   const transfers = transfersResult.data || [];
+  const auditEvents = eventsResult.data || [];
 
   // Build transfer amount map
   const transferAmounts = new Map<string, number>();
   for (const t of transfers) {
     transferAmounts.set(t.id, Number(t.amount) || 0);
+  }
+
+  // Resolve caller agent names (client_agent_id is VARCHAR, not FK — batch lookup)
+  const callerAgentIds = [...new Set(
+    taskRows.map((r: any) => r.client_agent_id).filter(Boolean)
+  )] as string[];
+  const callerNameMap = new Map<string, string>();
+  if (callerAgentIds.length > 0) {
+    const { data: callerAgents } = await supabase
+      .from('agents')
+      .select('id, name')
+      .in('id', callerAgentIds)
+      .eq('tenant_id', ctx.tenantId);
+    for (const a of callerAgents || []) {
+      callerNameMap.set(a.id, a.name);
+    }
   }
 
   // 3. Build response
@@ -1602,6 +1785,8 @@ a2aRouter.get('/sessions/:contextId', async (c) => {
     direction: r.direction,
     agentId: r.agent_id,
     agentName: r.agents?.name || null,
+    clientAgentId: r.client_agent_id || null,
+    clientAgentName: callerNameMap.get(r.client_agent_id) || null,
     transferId: r.transfer_id || undefined,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -1623,6 +1808,18 @@ a2aRouter.get('/sessions/:contextId', async (c) => {
     createdAt: a.created_at,
   }));
 
+  const eventList = auditEvents.map((e: any) => ({
+    eventId: e.id,
+    taskId: e.task_id,
+    eventType: e.event_type,
+    fromState: e.from_state,
+    toState: e.to_state,
+    actorType: e.actor_type,
+    data: e.data,
+    durationMs: e.duration_ms,
+    createdAt: e.created_at,
+  }));
+
   // 4. Compute summary
   const totalCost = taskRows.reduce((sum: number, r: any) => {
     return sum + (r.transfer_id ? (transferAmounts.get(r.transfer_id) || 0) : 0);
@@ -1631,17 +1828,32 @@ a2aRouter.get('/sessions/:contextId', async (c) => {
   const allTimestamps = [
     ...messages.map((m: any) => m.created_at),
     ...artifacts.map((a: any) => a.created_at),
+    ...auditEvents.map((e: any) => e.created_at),
     ...taskRows.map((r: any) => r.created_at),
   ].filter(Boolean).sort();
 
+  // 5. Build unique agents list (both callers and callees)
+  const agentMap = new Map<string, { id: string; name: string | null; role: 'provider' | 'caller' }>();
+  for (const r of taskRows as any[]) {
+    if (r.agent_id && !agentMap.has(r.agent_id)) {
+      agentMap.set(r.agent_id, { id: r.agent_id, name: r.agents?.name || null, role: 'provider' });
+    }
+    if (r.client_agent_id && !agentMap.has(r.client_agent_id)) {
+      agentMap.set(r.client_agent_id, { id: r.client_agent_id, name: callerNameMap.get(r.client_agent_id) || null, role: 'caller' });
+    }
+  }
+
   return c.json({
     contextId,
+    agents: Array.from(agentMap.values()),
     tasks,
     messages: messageList,
     artifacts: artifactList,
+    events: eventList,
     summary: {
       taskCount: taskRows.length,
       messageCount: messages.length,
+      eventCount: auditEvents.length,
       totalCost,
       firstActivity: allTimestamps[0] || null,
       lastActivity: allTimestamps[allTimestamps.length - 1] || null,
@@ -1660,7 +1872,7 @@ a2aRouter.get('/sessions', async (c) => {
   // Fetch all tasks with a non-null context_id
   const { data: tasks, error } = await supabase
     .from('a2a_tasks')
-    .select('id, context_id, state, direction, agent_id, transfer_id, created_at, updated_at, agents!inner(name)')
+    .select('id, context_id, state, direction, agent_id, client_agent_id, transfer_id, created_at, updated_at, agents!inner(name)')
     .eq('tenant_id', ctx.tenantId)
     .not('context_id', 'is', null)
     .order('created_at', { ascending: false });
@@ -1709,6 +1921,22 @@ a2aRouter.get('/sessions', async (c) => {
     }
   }
 
+  // Resolve caller agent names (client_agent_id is VARCHAR, not FK)
+  const allCallerIds = [...new Set(
+    rows.map((r: any) => r.client_agent_id).filter(Boolean)
+  )] as string[];
+  const callerNameMap = new Map<string, string>();
+  if (allCallerIds.length > 0) {
+    const { data: callerAgents } = await supabase
+      .from('agents')
+      .select('id, name')
+      .in('id', allCallerIds)
+      .eq('tenant_id', ctx.tenantId);
+    for (const a of callerAgents || []) {
+      callerNameMap.set(a.id, a.name);
+    }
+  }
+
   // Build sessions
   const sessions = Array.from(sessionMap.entries()).map(([contextId, taskRows]) => {
     const agentNames = [...new Set(taskRows.map((r: any) => (r as any).agents?.name).filter(Boolean))];
@@ -1718,10 +1946,22 @@ a2aRouter.get('/sessions', async (c) => {
     const totalCost = transferIds.reduce((sum: number, tid: string) => sum + (transferAmounts.get(tid) || 0), 0);
     const msgCount = taskRows.reduce((sum: number, r: any) => sum + (messageCounts.get(r.id) || 0), 0);
 
+    // Collect unique agents involved (both callers and callees)
+    const agentsInSession = new Map<string, { id: string; name: string | null; role: 'provider' | 'caller' }>();
+    for (const r of taskRows) {
+      if (r.agent_id && !agentsInSession.has(r.agent_id)) {
+        agentsInSession.set(r.agent_id, { id: r.agent_id, name: (r as any).agents?.name || null, role: 'provider' });
+      }
+      if (r.client_agent_id && !agentsInSession.has(r.client_agent_id)) {
+        agentsInSession.set(r.client_agent_id, { id: r.client_agent_id, name: callerNameMap.get(r.client_agent_id) || null, role: 'caller' });
+      }
+    }
+
     return {
       contextId,
       taskCount: taskRows.length,
       agentNames,
+      agents: Array.from(agentsInSession.values()),
       directions,
       latestState: latestTask.state,
       totalCost,

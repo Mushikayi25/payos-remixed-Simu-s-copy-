@@ -12,6 +12,7 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   ArrowLeftRight,
+  ArrowRight,
 } from 'lucide-react';
 import { useApiClient } from '@/lib/api-client';
 import { formatDate, formatCurrency } from '@/lib/utils';
@@ -91,10 +92,14 @@ export default function A2ASessionsPage() {
 
   // Client-side search filter
   const filteredSessions = search
-    ? sessions.filter((s) =>
-        s.contextId?.toLowerCase().includes(search.toLowerCase()) ||
-        s.agentNames?.some((n: string) => n.toLowerCase().includes(search.toLowerCase()))
-      )
+    ? sessions.filter((s) => {
+        const q = search.toLowerCase();
+        return (
+          s.contextId?.toLowerCase().includes(q) ||
+          s.agentNames?.some((n: string) => n.toLowerCase().includes(q)) ||
+          s.agents?.some((a: any) => a.name?.toLowerCase().includes(q))
+        );
+      })
     : sessions;
 
   return (
@@ -206,13 +211,49 @@ export default function A2ASessionsPage() {
                         </Link>
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {session.agentNames?.map((name: string) => (
-                            <span key={name} className="text-xs bg-muted px-1.5 py-0.5 rounded">
-                              {name}
-                            </span>
-                          ))}
-                          {(!session.agentNames || session.agentNames.length === 0) && (
+                        <div className="flex items-center gap-1">
+                          {session.agents?.length > 0 ? (
+                            <>
+                              {(() => {
+                                const caller = session.agents.find((a: any) => a.role === 'caller');
+                                const provider = session.agents.find((a: any) => a.role === 'provider');
+                                return (
+                                  <>
+                                    {caller && (
+                                      <Link
+                                        href={`/dashboard/agents/${caller.id}`}
+                                        className="text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded hover:underline"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        {caller.name || caller.id.slice(0, 8)}
+                                      </Link>
+                                    )}
+                                    {caller && provider && (
+                                      <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                                    )}
+                                    {provider && (
+                                      <Link
+                                        href={`/dashboard/agents/${provider.id}`}
+                                        className="text-xs bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded hover:underline"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        {provider.name || provider.id.slice(0, 8)}
+                                      </Link>
+                                    )}
+                                    {!caller && !provider && (
+                                      <span className="text-muted-foreground">--</span>
+                                    )}
+                                  </>
+                                );
+                              })()}
+                            </>
+                          ) : session.agentNames?.length > 0 ? (
+                            session.agentNames.map((name: string) => (
+                              <span key={name} className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                                {name}
+                              </span>
+                            ))
+                          ) : (
                             <span className="text-muted-foreground">--</span>
                           )}
                         </div>

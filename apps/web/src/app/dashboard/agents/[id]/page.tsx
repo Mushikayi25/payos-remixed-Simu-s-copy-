@@ -28,6 +28,9 @@ import {
   Network,
   CreditCard,
   Wallet,
+  Star,
+  ThumbsUp,
+  ThumbsDown,
 } from 'lucide-react';
 import { useQuery as useTanstackQuery } from '@tanstack/react-query';
 import type { Agent, Stream, AgentLimits } from '@sly/api-client';
@@ -49,7 +52,7 @@ import type { AgentAction } from '@/lib/mock-data/agent-activity';
 import { formatCurrency } from '@/lib/utils';
 import { format } from 'date-fns';
 
-type TabType = 'overview' | 'streams' | 'mandates' | 'checkouts' | 'a2a' | 'wallet' | 'permissions' | 'kya' | 'activity';
+type TabType = 'overview' | 'streams' | 'mandates' | 'checkouts' | 'a2a' | 'wallet' | 'ratings' | 'permissions' | 'kya' | 'activity';
 
 function getAgentIcon(agentName: string) {
   if (agentName.includes('Inference API Consumer')) {
@@ -222,6 +225,7 @@ export default function AgentDetailPage() {
     { id: 'checkouts' as TabType, label: 'Checkouts', icon: ShoppingCart },
     { id: 'a2a' as TabType, label: 'A2A', icon: Network },
     { id: 'wallet' as TabType, label: 'Wallet', icon: Wallet },
+    { id: 'ratings' as TabType, label: 'Ratings', icon: Star },
     { id: 'permissions' as TabType, label: 'Permissions', icon: Key },
     { id: 'kya' as TabType, label: 'KYA', icon: Shield },
     { id: 'activity' as TabType, label: 'Activity', icon: History },
@@ -491,6 +495,9 @@ export default function AgentDetailPage() {
       {activeTab === 'wallet' && (
         <WalletTab agentId={agentId} />
       )}
+      {activeTab === 'ratings' && (
+        <RatingsTab agentId={agentId} />
+      )}
       {activeTab === 'permissions' && (
         <PermissionsTab agent={agent} />
       )}
@@ -512,6 +519,45 @@ const permissionMatrix: Record<string, string[]> = {
   treasury: ['view', 'manage', 'rebalance'],
 };
 
+// Inline rating summary for overview card
+function AgentRatingBadge({ agentId }: { agentId: string }) {
+  const api = useApiClient();
+  const { data: summary } = useTanstackQuery({
+    queryKey: ['agent-feedback-summary', agentId],
+    queryFn: async () => {
+      if (!api) return null;
+      const res = await fetch(`${api.baseUrl}/v1/agents/${agentId}/feedback/summary`, {
+        headers: { Authorization: `Bearer ${api.apiKey}` },
+      });
+      if (!res.ok) return null;
+      const json = await res.json();
+      return json.data;
+    },
+    enabled: !!api,
+  });
+
+  if (!summary || summary.total_reviews === 0) {
+    return <span className="text-sm text-gray-400">No reviews</span>;
+  }
+
+  const scoreColor = summary.avg_score >= 70
+    ? 'text-emerald-600 dark:text-emerald-400'
+    : summary.avg_score >= 40
+      ? 'text-amber-600 dark:text-amber-400'
+      : 'text-red-600 dark:text-red-400';
+
+  return (
+    <div className="flex items-center gap-2">
+      <Star className="h-3.5 w-3.5 text-amber-400 fill-amber-400" />
+      <span className={`text-sm font-semibold ${scoreColor}`}>
+        {summary.avg_score !== null ? summary.avg_score : '--'}
+      </span>
+      <span className="text-xs text-gray-400">/ 100</span>
+      <span className="text-xs text-gray-400">({summary.total_reviews})</span>
+    </div>
+  );
+}
+
 // Overview Tab
 function OverviewTab({ agent, limits }: { agent: Agent; limits: AgentLimits | null }) {
   return (
@@ -531,6 +577,10 @@ function OverviewTab({ agent, limits }: { agent: Agent; limits: AgentLimits | nu
           <div className="flex justify-between items-center">
             <dt className="text-gray-500 dark:text-gray-400">KYA Tier</dt>
             <dd><KyaTierBadge tier={agent.kyaTier} /></dd>
+          </div>
+          <div className="flex justify-between items-center">
+            <dt className="text-gray-500 dark:text-gray-400">Rating</dt>
+            <dd><AgentRatingBadge agentId={agent.id} /></dd>
           </div>
           <div className="flex justify-between">
             <dt className="text-gray-500 dark:text-gray-400">Created</dt>
@@ -827,6 +877,171 @@ function WalletSpendingPolicies({ agent }: { agent: Agent }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// Ratings Tab — Feedback summary + recent reviews
+function RatingsTab({ agentId }: { agentId: string }) {
+  const api = useApiClient();
+
+  const { data: summary, isLoading: summaryLoading } = useTanstackQuery({
+    queryKey: ['agent-feedback-summary', agentId],
+    queryFn: async () => {
+      if (!api) return null;
+      const res = await fetch(`${api.baseUrl}/v1/agents/${agentId}/feedback/summary`, {
+        headers: { Authorization: `Bearer ${api.apiKey}` },
+      });
+      if (!res.ok) return null;
+      const json = await res.json();
+      return json.data;
+    },
+    enabled: !!api,
+  });
+
+  const { data: recentFeedback, isLoading: feedbackLoading } = useTanstackQuery({
+    queryKey: ['agent-feedback-list', agentId],
+    queryFn: async () => {
+      if (!api) return [];
+      const res = await fetch(`${api.baseUrl}/v1/agents/${agentId}/feedback?limit=20`, {
+        headers: { Authorization: `Bearer ${api.apiKey}` },
+      });
+      if (!res.ok) return [];
+      const json = await res.json();
+      return json.data || [];
+    },
+    enabled: !!api,
+  });
+
+  const isLoading = summaryLoading || feedbackLoading;
+
+  if (isLoading) {
+    return (
+      <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 p-8 text-center">
+        <div className="text-gray-500">Loading ratings...</div>
+      </div>
+    );
+  }
+
+  if (!summary || summary.total_reviews === 0) {
+    return (
+      <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 p-8 text-center">
+        <Star className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">No ratings yet</h3>
+        <p className="text-gray-500 dark:text-gray-400 mt-2">
+          This agent hasn&apos;t received any feedback from callers.
+        </p>
+      </div>
+    );
+  }
+
+  const satisfactionColors: Record<string, string> = {
+    excellent: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
+    acceptable: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+    partial: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+    unacceptable: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+  };
+
+  const dist = summary.satisfaction_distribution || {};
+  const total = summary.total_reviews;
+
+  return (
+    <div className="space-y-6">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 p-5">
+          <p className="text-sm text-gray-500 dark:text-gray-400">Avg Score</p>
+          <p className="text-3xl font-bold mt-1">
+            {summary.avg_score !== null ? summary.avg_score : '--'}
+            <span className="text-sm font-normal text-gray-400">/100</span>
+          </p>
+        </div>
+        <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 p-5">
+          <p className="text-sm text-gray-500 dark:text-gray-400">Total Reviews</p>
+          <p className="text-3xl font-bold mt-1">{total}</p>
+        </div>
+        <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 p-5">
+          <p className="text-sm text-gray-500 dark:text-gray-400">Acceptance Rate</p>
+          <p className="text-3xl font-bold mt-1 text-emerald-600">
+            {((1 - summary.rejection_rate) * 100).toFixed(0)}%
+          </p>
+        </div>
+        <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 p-5">
+          <p className="text-sm text-gray-500 dark:text-gray-400">Rejection Rate</p>
+          <p className="text-3xl font-bold mt-1 text-red-600">
+            {(summary.rejection_rate * 100).toFixed(0)}%
+          </p>
+        </div>
+      </div>
+
+      {/* Satisfaction Distribution */}
+      <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Satisfaction Distribution</h3>
+        <div className="space-y-3">
+          {(['excellent', 'acceptable', 'partial', 'unacceptable'] as const).map((level) => {
+            const count = dist[level] || 0;
+            const pct = total > 0 ? (count / total) * 100 : 0;
+            return (
+              <div key={level} className="flex items-center gap-3">
+                <span className="text-sm capitalize w-28 text-gray-600 dark:text-gray-400">{level}</span>
+                <div className="flex-1 h-6 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${satisfactionColors[level].split(' ')[0]}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <span className="text-sm font-medium w-16 text-right text-gray-700 dark:text-gray-300">
+                  {count} ({pct.toFixed(0)}%)
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Recent Feedback */}
+      {recentFeedback && recentFeedback.length > 0 && (
+        <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Recent Reviews</h3>
+          <div className="space-y-3">
+            {recentFeedback.map((fb: any) => (
+              <div
+                key={fb.id}
+                className="flex items-start gap-3 p-3 rounded-lg border border-gray-100 dark:border-gray-800"
+              >
+                {fb.action === 'accept' ? (
+                  <ThumbsUp className="h-4 w-4 text-emerald-500 mt-0.5 shrink-0" />
+                ) : (
+                  <ThumbsDown className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {fb.satisfaction && (
+                      <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${satisfactionColors[fb.satisfaction] || 'bg-gray-100 text-gray-700'}`}>
+                        {fb.satisfaction}
+                      </span>
+                    )}
+                    {fb.score !== null && fb.score !== undefined && (
+                      <span className="text-xs text-gray-500 font-mono">{fb.score}/100</span>
+                    )}
+                    {fb.skill_id && (
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500">
+                        {fb.skill_id}
+                      </span>
+                    )}
+                  </div>
+                  {fb.comment && (
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{fb.comment}</p>
+                  )}
+                </div>
+                <span className="text-[10px] text-gray-400 whitespace-nowrap shrink-0">
+                  {format(new Date(fb.created_at), 'MMM d, HH:mm')}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1505,7 +1720,7 @@ function A2ATab({ agentId }: { agentId: string }) {
           </pre>
         )}
         {!showCard && cardData && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
             <div>
               <dt className="text-gray-500 dark:text-gray-400">Skills</dt>
               <dd className="font-medium text-gray-900 dark:text-white">{(cardData as any).skills?.length || 0}</dd>
@@ -1521,6 +1736,10 @@ function A2ATab({ agentId }: { agentId: string }) {
             <div>
               <dt className="text-gray-500 dark:text-gray-400">Version</dt>
               <dd className="font-medium text-gray-900 dark:text-white">{(cardData as any).version || '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-gray-500 dark:text-gray-400">Rating</dt>
+              <dd><AgentRatingBadge agentId={agentId} /></dd>
             </div>
           </div>
         )}
