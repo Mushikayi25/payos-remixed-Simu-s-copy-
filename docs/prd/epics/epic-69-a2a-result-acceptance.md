@@ -1,6 +1,6 @@
 # Epic 69: A2A Result Acceptance & Quality Feedback
 
-**Status:** Backlog
+**Status:** Complete
 **Phase:** 5.3 (Agent Economics)
 **Priority:** P1
 **Total Points:** 29
@@ -101,9 +101,9 @@ Task completed by provider agent
 
 | Story | Linear | Points | Priority | Labels | Status |
 |-------|--------|--------|----------|--------|--------|
-| 69.1: Acceptance gate on mandate resolution | [SLY-455](https://linear.app/sly-ai/issue/SLY-455) | 5 | High | Engineering | Backlog |
-| 69.2: Acceptance policy configuration | [SLY-456](https://linear.app/sly-ai/issue/SLY-456) | 3 | High | Engineering | Backlog |
-| 69.3: Review timeout worker | [SLY-457](https://linear.app/sly-ai/issue/SLY-457) | 3 | Medium | Engineering | Backlog |
+| 69.1: Acceptance gate on mandate resolution | [SLY-455](https://linear.app/sly-ai/issue/SLY-455) | 5 | High | Engineering | Done |
+| 69.2: Acceptance policy configuration | [SLY-456](https://linear.app/sly-ai/issue/SLY-456) | 3 | High | Engineering | Done |
+| 69.3: Review timeout worker | [SLY-457](https://linear.app/sly-ai/issue/SLY-457) | 3 | Medium | Engineering | Done |
 
 #### Story Details
 
@@ -159,8 +159,8 @@ Background check that finds tasks in `input-required` with `reason_code: 'result
 
 | Story | Linear | Points | Priority | Labels | Status |
 |-------|--------|--------|----------|--------|--------|
-| 69.4: Quality feedback on acceptance | [SLY-458](https://linear.app/sly-ai/issue/SLY-458) | 5 | Medium | Engineering, DB | Backlog |
-| 69.5: Partial settlement on acceptance | [SLY-459](https://linear.app/sly-ai/issue/SLY-459) | 5 | Medium | Engineering | Backlog |
+| 69.4: Quality feedback on acceptance | [SLY-458](https://linear.app/sly-ai/issue/SLY-458) | 5 | Medium | Engineering, DB | Done |
+| 69.5: Partial settlement on acceptance | [SLY-459](https://linear.app/sly-ai/issue/SLY-459) | 5 | Medium | Engineering | Done |
 
 #### Story Details
 
@@ -219,8 +219,8 @@ When caller accepts with `satisfaction: 'partial'`, allow `settlement_amount` ov
 
 | Story | Linear | Points | Priority | Labels | Status |
 |-------|--------|--------|----------|--------|--------|
-| 69.6: Feedback query API | [SLY-460](https://linear.app/sly-ai/issue/SLY-460) | 3 | Low | Engineering, API | Backlog |
-| 69.7: Unit tests | [SLY-461](https://linear.app/sly-ai/issue/SLY-461) | 5 | High | Engineering, Testing | Backlog |
+| 69.6: Feedback query API | [SLY-460](https://linear.app/sly-ai/issue/SLY-460) | 3 | Low | Engineering, API | Done |
+| 69.7: Unit tests | [SLY-461](https://linear.app/sly-ai/issue/SLY-461) | 5 | High | Engineering, Testing | Done |
 
 #### Story Details
 
