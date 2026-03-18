@@ -62,7 +62,7 @@ function buildAgentURI(agentId: string): string {
   const baseUrl = process.env.API_BASE_URL
     || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : null)
     || 'http://localhost:4000';
-  return `${baseUrl}/v1/agents/${agentId}/card.json`;
+  return `${baseUrl}/agents/${agentId}/card.json`;
 }
 
 /**

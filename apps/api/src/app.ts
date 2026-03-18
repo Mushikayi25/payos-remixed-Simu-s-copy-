@@ -26,7 +26,7 @@ import connectedAccountsRouter from './routes/organization/connected-accounts.js
 import organizationOnboardingRouter from './routes/organization/onboarding.js';
 import apiKeysRouter from './routes/api-keys.js';
 import accountsRouter from './routes/accounts.js';
-import agentsRouter from './routes/agents.js';
+import agentsRouter, { agentCardRouter } from './routes/agents.js';
 import transfersRouter from './routes/transfers.js';
 import internalTransfersRouter from './routes/internal-transfers.js';
 import streamsRouter from './routes/streams.js';
@@ -88,6 +88,7 @@ import portalTokensRouter from './routes/portal-tokens.js';
 import usageRouter from './routes/usage.js';
 import agentWalletsRouter from './routes/agent-wallets.js';
 import betaAdminRouter from './routes/beta-admin.js';
+import reputationRouter from './routes/reputation.js';
 
 const app = new Hono();
 
@@ -248,6 +249,10 @@ app.route('/ucp', ucpSchemasRouter);
 // Story 43.11: UCP Webhook Handler
 app.route('/webhooks/ucp', ucpWebhooksRouter);
 
+// Agent card (public - ERC-8004 on-chain identity metadata)
+// Epic 63: On-chain agent registration — mounted outside /v1 to bypass auth
+app.route('/agents', agentCardRouter);
+
 // Protocol Discovery API (public - for discovering available protocols)
 // Epic 49: Protocol Discovery & Management
 app.route('/v1/protocols', protocolsRouter);
@@ -335,6 +340,7 @@ v1.route('/payment-handlers', paymentHandlersListRouter); // DB-driven handler r
 v1.route('/portal-tokens', portalTokensRouter); // Portal token CRUD (Epic 65)
 v1.route('/usage', usageRouter); // Usage API (Epic 65)
 v1.route('/agents', agentWalletsRouter); // Agent wallet policy & exposure (Epic 18)
+v1.route('/reputation', reputationRouter); // Reputation bridge (Epic 63)
 // NOTE: Removed catch-all payment-methods mount to prevent route conflicts
 // Payment methods are already accessible at /v1/payment-methods
 // Account-specific payment methods handled via accounts router
