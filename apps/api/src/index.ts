@@ -9,6 +9,7 @@ import { TreasuryWorker } from './workers/treasury-worker.js';
 import { getA2ATaskWorker } from './workers/a2a-task-worker.js';
 import { getAsyncSettlementWorker } from './workers/async-settlement-worker.js';
 import { getBatchSettlementWorker } from './workers/batch-settlement-worker.js';
+import { getReviewTimeoutWorker } from './workers/review-timeout-worker.js';
 import { environmentManager } from './config/environment.js';
 import { loadHandlersFromDB } from './services/ucp/payment-handlers/index.js';
 import { createClient } from './db/client.js';
@@ -30,6 +31,7 @@ const enableTreasuryWorker = process.env.ENABLE_TREASURY_WORKER !== 'false'; // 
 const enableA2AWorker = process.env.ENABLE_A2A_WORKER !== 'false'; // Enabled by default
 const enableAsyncSettlement = process.env.ENABLE_ASYNC_SETTLEMENT !== 'false'; // Enabled by default
 const enableBatchSettlement = process.env.ENABLE_BATCH_SETTLEMENT !== 'false'; // Enabled by default
+const enableReviewTimeout = process.env.ENABLE_REVIEW_TIMEOUT !== 'false'; // Enabled by default
 
 console.log(`
 ╔══════════════════════════════════════════════════╗
@@ -47,6 +49,7 @@ console.log(`
 ║  🤖 A2A Task Worker: ${(enableA2AWorker ? 'ON' : 'OFF').padEnd(25)}║
 ║  ⚡ Async Settlement: ${(enableAsyncSettlement ? 'ON' : 'OFF').padEnd(24)}║
 ║  📦 Batch Settlement: ${(enableBatchSettlement ? 'ON' : 'OFF').padEnd(23)}║
+║  ✅ Review Timeout: ${(enableReviewTimeout ? 'ON' : 'OFF').padEnd(26)}║
 ║  📊 Ops Tracker: ON                             ║
 ╚══════════════════════════════════════════════════╝
 `);
@@ -128,6 +131,14 @@ if (enableBatchSettlement) {
   batchSettlementWorker.start(batchInterval);
 }
 
+// Start review timeout worker - Epic 69, Story 69.3
+let reviewTimeoutWorker: ReturnType<typeof getReviewTimeoutWorker> | null = null;
+if (enableReviewTimeout) {
+  const reviewInterval = parseInt(process.env.REVIEW_TIMEOUT_POLL_MS || '60000');
+  reviewTimeoutWorker = getReviewTimeoutWorker();
+  reviewTimeoutWorker.start(reviewInterval);
+}
+
 // Graceful shutdown
 const shutdown = async (signal: string) => {
   console.log(`${signal} received, shutting down gracefully...`);
@@ -153,6 +164,9 @@ const shutdown = async (signal: string) => {
   if (batchSettlementWorker) {
     batchSettlementWorker.stop();
   }
+  if (reviewTimeoutWorker) {
+    reviewTimeoutWorker.stop();
+  }
   // Drain ops buffers before exit (Epic 65)
   await stopOpTracker();
   await stopRequestCounter();
@@ -171,7 +185,7 @@ try {
   });
   
   console.log(`✅ Server is listening on ${host}:${port}`);
-  console.log(`📍 Railway URL: https://${process.env.RAILWAY_PUBLIC_DOMAIN || 'your-app.railway.app'}`);
+  console.log(`📍 Railway URL: https://${process.env.RAILWAY_PUBLIC_DOMAIN || 'payos-production.up.railway.app'}`);
 } catch (error) {
   console.error('❌ Failed to start server:', error);
   process.exit(1);
