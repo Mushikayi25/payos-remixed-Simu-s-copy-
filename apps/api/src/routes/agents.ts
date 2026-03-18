@@ -2664,20 +2664,24 @@ agentCardRouter.get('/:id/card.json', async (c) => {
   const network = process.env.PAYOS_ENVIRONMENT === 'production' ? 'base' : 'base-sepolia';
   const explorerBase = network === 'base' ? 'https://basescan.org' : 'https://sepolia.basescan.org';
 
-  return c.json({
-    type: 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1',
+  // Return raw JSON (bypass response wrapper) — BaseScan/ERC-721 expects name/description at root
+  const cardJson = {
     name: data.name,
     description: data.description || '',
     ...(data.erc8004_agent_id ? { agentId: data.erc8004_agent_id } : {}),
     registryContract,
     ...(wallet?.wallet_address ? { walletAddress: wallet.wallet_address } : {}),
     network,
+    type: 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1',
     endpoints,
     supportedTrust: ['reputation'],
     links: {
       ...(data.erc8004_agent_id ? { identity: `${explorerBase}/nft/${registryContract}/${data.erc8004_agent_id}` } : {}),
       ...(wallet?.wallet_address ? { wallet: `${explorerBase}/address/${wallet.wallet_address}` } : {}),
     },
+  };
+  return new Response(JSON.stringify(cardJson), {
+    headers: { 'Content-Type': 'application/json' },
   });
 });
 
