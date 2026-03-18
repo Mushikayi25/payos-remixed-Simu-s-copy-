@@ -59,7 +59,9 @@ export function isRegistrationEnabled(): boolean {
  * Build the agent card URI that the on-chain NFT points to.
  */
 function buildAgentURI(agentId: string): string {
-  const baseUrl = process.env.API_BASE_URL || 'http://localhost:4000';
+  const baseUrl = process.env.API_BASE_URL
+    || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : null)
+    || 'http://localhost:4000';
   return `${baseUrl}/v1/agents/${agentId}/card.json`;
 }
 
