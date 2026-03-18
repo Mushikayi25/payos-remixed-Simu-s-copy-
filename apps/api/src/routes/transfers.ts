@@ -144,8 +144,37 @@ transfers.get('/', async (c) => {
     throw new Error('Failed to fetch transfers from database');
   }
   
-  const transfers = (data || []).map(row => mapTransferFromDb(row));
-  
+  // Batch-fetch agent on-chain IDs and wallet addresses for agent-initiated transfers
+  const agentInitiatedIds = [...new Set(
+    (data || []).filter(r => r.initiated_by_type === 'agent' && r.initiated_by_id).map(r => r.initiated_by_id)
+  )];
+  const agentOnChainMap = new Map<string, string>();
+  const agentWalletMap = new Map<string, string>();
+  if (agentInitiatedIds.length > 0) {
+    const [{ data: agents }, { data: wallets }] = await Promise.all([
+      supabase.from('agents').select('id, erc8004_agent_id').in('id', agentInitiatedIds),
+      supabase.from('wallets').select('managed_by_agent_id, wallet_address').in('managed_by_agent_id', agentInitiatedIds).like('wallet_address', '0x%'),
+    ]);
+    for (const a of agents || []) {
+      if (a.erc8004_agent_id) agentOnChainMap.set(a.id, a.erc8004_agent_id);
+    }
+    for (const w of wallets || []) {
+      if (w.managed_by_agent_id && w.wallet_address) agentWalletMap.set(w.managed_by_agent_id, w.wallet_address);
+    }
+  }
+
+  const transfers = (data || []).map(row => {
+    if (row.initiated_by_type === 'agent') {
+      if (agentOnChainMap.has(row.initiated_by_id)) {
+        row.initiator_erc8004_agent_id = agentOnChainMap.get(row.initiated_by_id);
+      }
+      if (agentWalletMap.has(row.initiated_by_id)) {
+        row.initiator_wallet_address = agentWalletMap.get(row.initiated_by_id);
+      }
+    }
+    return mapTransferFromDb(row);
+  });
+
   return c.json(paginationResponse(transfers, count || 0, { page, limit }));
 });
 
@@ -462,14 +491,47 @@ transfers.get('/:id', async (c) => {
   if (error || !data) {
     throw new NotFoundError('Transfer', id);
   }
-  
+
+  // Enrich missing account names
+  if (!data.from_account_name && data.from_account_id) {
+    const { data: fromAcct } = await supabase.from('accounts').select('name').eq('id', data.from_account_id).single();
+    if (fromAcct?.name) data.from_account_name = fromAcct.name;
+  }
+  if (!data.to_account_name && data.to_account_id) {
+    const { data: toAcct } = await supabase.from('accounts').select('name').eq('id', data.to_account_id).single();
+    if (toAcct?.name) data.to_account_name = toAcct.name;
+  }
+
+  // Enrich with agent's on-chain identity and wallet if initiated by an agent
+  if (data.initiated_by_type === 'agent' && data.initiated_by_id) {
+    const { data: agent } = await supabase
+      .from('agents')
+      .select('erc8004_agent_id')
+      .eq('id', data.initiated_by_id)
+      .single();
+    if (agent?.erc8004_agent_id) {
+      data.initiator_erc8004_agent_id = agent.erc8004_agent_id;
+    }
+    const { data: wallet } = await supabase
+      .from('wallets')
+      .select('wallet_address')
+      .eq('managed_by_agent_id', data.initiated_by_id)
+      .like('wallet_address', '0x%')
+      .limit(1)
+      .single();
+    if (wallet?.wallet_address) {
+      data.initiator_wallet_address = wallet.wallet_address;
+    }
+  }
+
   const transfer = mapTransferFromDb(data);
-  const responseBody: any = { 
+  const responseBody: any = {
     data: transfer,
     links: {
       self: `/v1/transfers/${id}`,
       from_account: `/v1/accounts/${data.from_account_id}`,
       to_account: `/v1/accounts/${data.to_account_id}`,
+      ...(data.tx_hash ? { explorer: `https://sepolia.basescan.org/tx/${data.tx_hash}` } : {}),
     },
   };
   

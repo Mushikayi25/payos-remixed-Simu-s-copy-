@@ -21,6 +21,7 @@ import { validateProcessingConfig, VALID_PROCESSING_MODES } from '../utils/proce
 import { trackOp } from '../services/ops/track-op.js';
 import { OpType } from '../services/ops/operation-types.js';
 import { checkAgentLimit } from '../services/tenant-limits.js';
+import { registerAgent } from '../services/erc8004/registry.js';
 
 const agents = new Hono();
 
@@ -184,6 +185,22 @@ agents.get('/', async (c) => {
     throw new Error('Failed to fetch agents from database');
   }
   
+  // Batch-fetch on-chain wallet addresses for agents
+  const agentIds = (data || []).map(r => r.id);
+  const walletMap = new Map<string, string>();
+  if (agentIds.length > 0) {
+    const { data: wallets } = await supabase
+      .from('wallets')
+      .select('managed_by_agent_id, wallet_address')
+      .in('managed_by_agent_id', agentIds)
+      .like('wallet_address', '0x%');
+    for (const w of wallets || []) {
+      if (w.managed_by_agent_id && w.wallet_address) {
+        walletMap.set(w.managed_by_agent_id, w.wallet_address);
+      }
+    }
+  }
+
   // Map to response format
   const agents = (data || []).map(row => {
     const agent = mapAgentFromDb(row);
@@ -195,9 +212,12 @@ agents.get('/', async (c) => {
         verificationTier: row.accounts.verification_tier,
       };
     }
+    if (walletMap.has(row.id)) {
+      agent.walletAddress = walletMap.get(row.id);
+    }
     return agent;
   });
-  
+
   return c.json(paginationResponse(agents, count || 0, { page, limit }));
 });
 
@@ -493,6 +513,11 @@ agents.post('/', async (c) => {
     id: data.id, name, account_id: accountId, kya_tier: 0, status: 'active',
   }).catch(console.error);
 
+  // ERC-8004: Auto-register agent on-chain (fire-and-forget)
+  registerAgent(data.id, name, description || '').catch(err =>
+    console.warn('[ERC-8004] On-chain registration failed:', err.message)
+  );
+
   trackOp({
     tenantId: ctx.tenantId,
     operation: OpType.ENTITY_AGENT_CREATED,
@@ -559,6 +584,18 @@ agents.get('/:id', async (c) => {
       name: data.accounts.name,
       verificationTier: data.accounts.verification_tier,
     };
+  }
+
+  // Fetch on-chain wallet address
+  const { data: agentWallet } = await supabase
+    .from('wallets')
+    .select('wallet_address')
+    .eq('managed_by_agent_id', id)
+    .like('wallet_address', '0x%')
+    .limit(1)
+    .single();
+  if (agentWallet?.wallet_address) {
+    agent.walletAddress = agentWallet.wallet_address;
   }
 
   // Fetch active skills for this agent
@@ -1947,6 +1984,119 @@ const skillSchema = z.object({
   metadata: z.record(z.unknown()).optional(),
 });
 
+// =============================================================================
+// Feedback Endpoints (Epic 69 — Result Acceptance & Quality Feedback)
+// =============================================================================
+
+/**
+ * GET /v1/agents/:id/feedback/summary — Aggregated feedback stats
+ */
+agents.get('/:id/feedback/summary', async (c) => {
+  const ctx = c.get('ctx');
+  const id = c.req.param('id');
+  if (!isValidUUID(id)) throw new ValidationError('Invalid agent ID');
+
+  const supabase = createClient();
+
+  // Verify agent belongs to tenant
+  const { data: agent } = await supabase
+    .from('agents')
+    .select('id')
+    .eq('id', id)
+    .eq('tenant_id', ctx.tenantId)
+    .single();
+
+  if (!agent) throw new NotFoundError('Agent');
+
+  const skillId = c.req.query('skill_id');
+
+  let query = supabase
+    .from('a2a_task_feedback')
+    .select('action, satisfaction, score')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('provider_agent_id', id);
+
+  if (skillId) query = query.eq('skill_id', skillId);
+
+  const { data: rows, error } = await query;
+  if (error) throw new Error(error.message);
+
+  const feedback = rows || [];
+  const total = feedback.length;
+  const rejections = feedback.filter(r => r.action === 'reject').length;
+  const scores = feedback.filter(r => r.score !== null).map(r => r.score as number);
+  const avgScore = scores.length > 0 ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : null;
+
+  const distribution: Record<string, number> = { excellent: 0, acceptable: 0, partial: 0, unacceptable: 0 };
+  for (const row of feedback) {
+    if (row.satisfaction && distribution[row.satisfaction] !== undefined) {
+      distribution[row.satisfaction]++;
+    }
+  }
+
+  return c.json({
+    data: {
+      agent_id: id,
+      skill_id: skillId || null,
+      avg_score: avgScore,
+      total_reviews: total,
+      satisfaction_distribution: distribution,
+      rejection_rate: total > 0 ? Math.round((rejections / total) * 1000) / 1000 : 0,
+    },
+  });
+});
+
+/**
+ * GET /v1/agents/:id/feedback — Paginated feedback list
+ */
+agents.get('/:id/feedback', async (c) => {
+  const ctx = c.get('ctx');
+  const id = c.req.param('id');
+  if (!isValidUUID(id)) throw new ValidationError('Invalid agent ID');
+
+  const supabase = createClient();
+
+  // Verify agent belongs to tenant
+  const { data: agent } = await supabase
+    .from('agents')
+    .select('id')
+    .eq('id', id)
+    .eq('tenant_id', ctx.tenantId)
+    .single();
+
+  if (!agent) throw new NotFoundError('Agent');
+
+  const queryParams = c.req.query();
+  const { page, limit } = getPaginationParams(queryParams);
+  const offset = (page - 1) * limit;
+
+  let query = supabase
+    .from('a2a_task_feedback')
+    .select('*', { count: 'exact' })
+    .eq('tenant_id', ctx.tenantId)
+    .eq('provider_agent_id', id)
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  const skillId = c.req.query('skill_id');
+  if (skillId) query = query.eq('skill_id', skillId);
+
+  const satisfaction = c.req.query('satisfaction');
+  if (satisfaction) query = query.eq('satisfaction', satisfaction);
+
+  const dateFrom = c.req.query('date_from');
+  if (dateFrom) query = query.gte('created_at', dateFrom);
+
+  const dateTo = c.req.query('date_to');
+  if (dateTo) query = query.lte('created_at', dateTo);
+
+  const { data: rows, count, error } = await query;
+  if (error) throw new Error(error.message);
+
+  const total = count || 0;
+  return c.json(paginationResponse(rows || [], total, { page, limit }));
+});
+
 /**
  * GET /v1/agents/:id/skills — List agent's skills
  */
@@ -2466,6 +2616,67 @@ agents.post('/:id/wallet/verify', async (c) => {
       wallet_address: agent.wallet_address,
       verification_status: 'verified',
       verified_at: now,
+    },
+  });
+});
+
+// ============================================
+// PUBLIC: Agent Card (ERC-8004 registration metadata)
+// Mounted outside auth middleware in app.ts
+// ============================================
+
+export const agentCardRouter = new Hono();
+
+agentCardRouter.get('/:id/card.json', async (c) => {
+  const id = c.req.param('id');
+  if (!isValidUUID(id)) {
+    return c.json({ error: 'Invalid agent ID' }, 400);
+  }
+
+  const supabase = createClient();
+  const { data } = await supabase
+    .from('agents')
+    .select('id, name, description, status, endpoint_url, erc8004_agent_id')
+    .eq('id', id)
+    .single();
+
+  if (!data || data.status !== 'active') {
+    return c.json({ error: 'Agent not found' }, 404);
+  }
+
+  // Fetch on-chain wallet address
+  const { data: wallet } = await supabase
+    .from('wallets')
+    .select('wallet_address')
+    .eq('managed_by_agent_id', id)
+    .like('wallet_address', '0x%')
+    .limit(1)
+    .single();
+
+  const baseUrl = process.env.API_BASE_URL || 'http://localhost:4000';
+  const endpoints: { name: string; endpoint: string }[] = [];
+  if (data.endpoint_url) {
+    endpoints.push({ name: 'A2A', endpoint: data.endpoint_url });
+  }
+  endpoints.push({ name: 'API', endpoint: `${baseUrl}/v1/agents/${id}` });
+
+  const registryContract = process.env.ERC8004_REGISTRY_CONTRACT || '0x7177a6867296406881E20d6647232314736Dd09A';
+  const network = process.env.PAYOS_ENVIRONMENT === 'production' ? 'base' : 'base-sepolia';
+  const explorerBase = network === 'base' ? 'https://basescan.org' : 'https://sepolia.basescan.org';
+
+  return c.json({
+    type: 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1',
+    name: data.name,
+    description: data.description || '',
+    ...(data.erc8004_agent_id ? { agentId: data.erc8004_agent_id } : {}),
+    registryContract,
+    ...(wallet?.wallet_address ? { walletAddress: wallet.wallet_address } : {}),
+    network,
+    endpoints,
+    supportedTrust: ['reputation'],
+    links: {
+      ...(data.erc8004_agent_id ? { identity: `${explorerBase}/nft/${registryContract}/${data.erc8004_agent_id}` } : {}),
+      ...(wallet?.wallet_address ? { wallet: `${explorerBase}/address/${wallet.wallet_address}` } : {}),
     },
   });
 });

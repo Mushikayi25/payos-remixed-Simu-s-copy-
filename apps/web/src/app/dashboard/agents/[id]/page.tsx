@@ -48,6 +48,7 @@ import { AgentQuickActions } from '@/components/agents/agent-quick-actions';
 import { ConfigureAgentDialog } from '@/components/agents/configure-agent-dialog';
 import { KyaTierBadge } from '@/components/agents/kya-tier-badge';
 import { WalletTab } from '@/components/agents/wallet-tab';
+import { TrustBreakdown } from '@/components/reputation/trust-breakdown';
 import type { AgentAction } from '@/lib/mock-data/agent-activity';
 import { formatCurrency } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -596,6 +597,60 @@ function OverviewTab({ agent, limits }: { agent: Agent; limits: AgentLimits | nu
         <RecentTransfers agentId={agent.id} />
       </div>
     </div>
+    {((agent as any).erc8004AgentId || (agent as any).walletAddress) && (
+      <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <Shield className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">On-Chain Identity</h3>
+        </div>
+        <dl className="space-y-4">
+          {(agent as any).erc8004AgentId && (
+            <div className="flex justify-between items-center">
+              <dt className="text-gray-500 dark:text-gray-400">ERC-8004 Token</dt>
+              <dd className="flex items-center gap-2">
+                <span className="font-mono text-sm text-gray-900 dark:text-white">#{(agent as any).erc8004AgentId}</span>
+                <a
+                  href={`https://sepolia.basescan.org/nft/0x7177a6867296406881E20d6647232314736Dd09A/${(agent as any).erc8004AgentId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-indigo-600 dark:text-indigo-400 hover:underline text-xs"
+                >
+                  View NFT &rarr;
+                </a>
+              </dd>
+            </div>
+          )}
+          {(agent as any).walletAddress && (
+            <div className="flex justify-between items-center">
+              <dt className="text-gray-500 dark:text-gray-400">Wallet</dt>
+              <dd className="flex items-center gap-2">
+                <span className="font-mono text-xs text-gray-900 dark:text-white">
+                  {(agent as any).walletAddress.slice(0, 6)}...{(agent as any).walletAddress.slice(-4)}
+                </span>
+                <a
+                  href={`https://sepolia.basescan.org/address/${(agent as any).walletAddress}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-indigo-600 dark:text-indigo-400 hover:underline text-xs"
+                >
+                  Transfers &rarr;
+                </a>
+              </dd>
+            </div>
+          )}
+          <div className="flex justify-between">
+            <dt className="text-gray-500 dark:text-gray-400">Network</dt>
+            <dd className="text-gray-900 dark:text-white">Base Sepolia</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-gray-500 dark:text-gray-400">Registry</dt>
+            <dd className="font-mono text-xs text-gray-500 dark:text-gray-400">
+              0x7177...d09A
+            </dd>
+          </div>
+        </dl>
+      </div>
+    )}
     <WalletSpendingPolicies agent={agent} />
     <LinkedPaymentInstruments agent={agent} />
     </div>
@@ -947,6 +1002,9 @@ function RatingsTab({ agentId }: { agentId: string }) {
 
   return (
     <div className="space-y-6">
+      {/* Trust Score Breakdown (Epic 63) */}
+      <TrustBreakdown agentId={agentId} />
+
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 p-5">

@@ -298,6 +298,24 @@ export default function TransferDetailPage() {
                     <dd className="text-red-600">{safeTransfer.failureReason}</dd>
                   </div>
                 )}
+                {(safeTransfer as any).txHash && (
+                  <div className="flex justify-between items-center">
+                    <dt className="text-gray-500 dark:text-gray-400">Tx Hash</dt>
+                    <dd className="flex items-center gap-2">
+                      <span className="font-mono text-xs text-gray-900 dark:text-white">
+                        {(safeTransfer as any).txHash.slice(0, 10)}...{(safeTransfer as any).txHash.slice(-8)}
+                      </span>
+                      <a
+                        href={`https://sepolia.basescan.org/tx/${(safeTransfer as any).txHash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-indigo-600 dark:text-indigo-400 hover:underline text-xs"
+                      >
+                        View on BaseScan &rarr;
+                      </a>
+                    </dd>
+                  </div>
+                )}
               </dl>
             </div>
 
@@ -320,6 +338,42 @@ export default function TransferDetailPage() {
                   <div className="flex justify-between">
                     <dt className="text-gray-500 dark:text-gray-400">Actor Name</dt>
                     <dd className="text-gray-900 dark:text-white">{safeTransfer.initiatedBy.name}</dd>
+                  </div>
+                )}
+                {(safeTransfer.initiatedBy as any)?.erc8004AgentId && (
+                  <div className="flex justify-between items-center">
+                    <dt className="text-gray-500 dark:text-gray-400">On-Chain ID</dt>
+                    <dd className="flex items-center gap-2">
+                      <span className="font-mono text-sm text-gray-900 dark:text-white">
+                        ERC-8004 #{(safeTransfer.initiatedBy as any).erc8004AgentId}
+                      </span>
+                      <a
+                        href={`https://sepolia.basescan.org/nft/0x7177a6867296406881E20d6647232314736Dd09A/${(safeTransfer.initiatedBy as any).erc8004AgentId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-indigo-600 dark:text-indigo-400 hover:underline text-xs"
+                      >
+                        Identity &rarr;
+                      </a>
+                    </dd>
+                  </div>
+                )}
+                {(safeTransfer.initiatedBy as any)?.walletAddress && (
+                  <div className="flex justify-between items-center">
+                    <dt className="text-gray-500 dark:text-gray-400">Agent Wallet</dt>
+                    <dd className="flex items-center gap-2">
+                      <span className="font-mono text-xs text-gray-900 dark:text-white">
+                        {(safeTransfer.initiatedBy as any).walletAddress.slice(0, 6)}...{(safeTransfer.initiatedBy as any).walletAddress.slice(-4)}
+                      </span>
+                      <a
+                        href={`https://sepolia.basescan.org/address/${(safeTransfer.initiatedBy as any).walletAddress}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-indigo-600 dark:text-indigo-400 hover:underline text-xs"
+                      >
+                        All transfers &rarr;
+                      </a>
+                    </dd>
                   </div>
                 )}
                 {safeTransfer.idempotencyKey && (

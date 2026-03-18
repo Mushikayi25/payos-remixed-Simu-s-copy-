@@ -160,6 +160,9 @@ export interface Agent {
     clientId?: string;
   };
 
+  erc8004AgentId?: string;
+  walletAddress?: string;
+
   createdAt: string;
   updatedAt: string;
 }
@@ -181,6 +184,8 @@ export interface Transfer {
     type: 'user' | 'agent';
     id: string;
     name: string;
+    erc8004AgentId?: string;
+    walletAddress?: string;
   };
 
   amount: number;
@@ -196,6 +201,8 @@ export interface Transfer {
 
   fees: number;
   description?: string;
+
+  txHash?: string;
 
   idempotencyKey?: string;
 
@@ -417,4 +424,27 @@ export interface GenerateReportRequest {
   format: 'pdf' | 'csv' | 'json';
 }
 
+// ============================================
+// REPUTATION (Epic 63)
+// ============================================
 
+export type TrustTier = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
+export type ConfidenceLevel = 'high' | 'medium' | 'low' | 'none';
+
+export interface ReputationDimension {
+  name: 'identity' | 'payment_reliability' | 'capability_trust' | 'community_signal' | 'service_quality';
+  score: number;
+  weight: number;
+  sources: string[];
+  dataPoints: number;
+}
+
+export interface UnifiedTrustScore {
+  score: number;
+  tier: TrustTier;
+  confidence: ConfidenceLevel;
+  dimensions: ReputationDimension[];
+  dataPoints: number;
+  lastRefreshed: string;
+  stale: boolean;
+}
