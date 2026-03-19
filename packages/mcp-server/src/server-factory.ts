@@ -1503,6 +1503,88 @@ export function createMcpServer(sly: Sly, apiUrl: string, apiKey: string): Serve
         };
       }
 
+      // ====================================================================
+      // Support Tools (Intercom Fin)
+      // ====================================================================
+      case 'explain_rejection': {
+        const { error_code, transaction_id, agent_id } = args as {
+          error_code?: string;
+          transaction_id?: string;
+          agent_id?: string;
+        };
+        const params = new URLSearchParams();
+        if (error_code) params.set('error_code', error_code);
+        if (transaction_id) params.set('transaction_id', transaction_id);
+        if (agent_id) params.set('agent_id', agent_id);
+        const query = params.toString();
+        const result = await sly.request(`/v1/support/explain-rejection${query ? `?${query}` : ''}`, {
+          method: 'GET',
+        });
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case 'request_limit_increase': {
+        const { agent_id, limit_type, requested_amount, reason, duration } = args as {
+          agent_id: string;
+          limit_type: string;
+          requested_amount: number;
+          reason: string;
+          duration?: string;
+        };
+        const body: Record<string, any> = { agent_id, limit_type, requested_amount, reason };
+        if (duration) body.duration = duration;
+        const result = await sly.request('/v1/support/limit-requests', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        });
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case 'open_dispute': {
+        const { transaction_id, reason, description, requested_resolution } = args as {
+          transaction_id: string;
+          reason: string;
+          description: string;
+          requested_resolution?: string;
+        };
+        const body: Record<string, any> = {
+          transferId: transaction_id,
+          reason,
+          description,
+        };
+        if (requested_resolution) body.requestedResolution = requested_resolution;
+        const result = await sly.request('/v1/disputes', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        });
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case 'escalate_to_human': {
+        const { agent_id, reason, summary, priority } = args as {
+          agent_id?: string;
+          reason: string;
+          summary: string;
+          priority?: string;
+        };
+        const body: Record<string, any> = { reason, summary };
+        if (agent_id) body.agent_id = agent_id;
+        if (priority) body.priority = priority;
+        const result = await sly.request('/v1/support/escalations', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        });
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
       default:
         throw new Error(`Unknown tool: ${name}`);
     }

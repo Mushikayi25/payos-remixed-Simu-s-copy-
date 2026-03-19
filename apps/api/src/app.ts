@@ -92,6 +92,7 @@ import reputationRouter from './routes/reputation.js';
 import mppRouter from './routes/mpp.js';
 import compositionRouter from './routes/composition.js';
 import mcpRouter from './routes/mcp.js';
+import supportRouter from './routes/support.js';
 
 const app = new Hono();
 
@@ -350,6 +351,7 @@ v1.route('/agents', agentWalletsRouter); // Agent wallet policy & exposure (Epic
 v1.route('/reputation', reputationRouter); // Reputation bridge (Epic 63)
 v1.route('/mpp', mppRouter); // Machine Payments Protocol (Epic 71)
 v1.route('/composition', compositionRouter); // Multi-protocol composition (Epic 71)
+v1.route('/support', supportRouter); // Support tools for Intercom Fin
 // NOTE: Removed catch-all payment-methods mount to prevent route conflicts
 // Payment methods are already accessible at /v1/payment-methods
 // Account-specific payment methods handled via accounts router

@@ -1947,4 +1947,118 @@ export const tools: Tool[] = [
       required: ['receipt_id'],
     },
   },
+
+  // ==========================================================================
+  // Support Tools (Intercom Fin)
+  // ==========================================================================
+  {
+    name: 'explain_rejection',
+    description: 'Explain why a transaction was rejected. Returns a human-readable explanation with actionable resolution options. Provide at least one of error_code, transaction_id, or agent_id.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        error_code: {
+          type: 'string',
+          description: 'The error code from the rejection (e.g., DAILY_LIMIT_EXCEEDED, INSUFFICIENT_BALANCE)',
+        },
+        transaction_id: {
+          type: 'string',
+          description: 'UUID of the rejected transaction',
+        },
+        agent_id: {
+          type: 'string',
+          description: 'UUID of the agent whose limits to check',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'request_limit_increase',
+    description: 'Submit a request to increase an agent\'s spending limit. Creates a pending request that must be approved by a human operator.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agent_id: {
+          type: 'string',
+          description: 'UUID of the agent requesting the increase',
+        },
+        limit_type: {
+          type: 'string',
+          enum: ['per_transaction', 'daily', 'monthly'],
+          description: 'Which limit to increase',
+        },
+        requested_amount: {
+          type: 'number',
+          description: 'The new desired limit amount (in USD)',
+        },
+        reason: {
+          type: 'string',
+          description: 'Business justification for the increase',
+        },
+        duration: {
+          type: 'string',
+          enum: ['temporary_24h', 'temporary_7d', 'permanent'],
+          description: 'How long the increase should last (default: permanent)',
+        },
+      },
+      required: ['agent_id', 'limit_type', 'requested_amount', 'reason'],
+    },
+  },
+  {
+    name: 'open_dispute',
+    description: 'Open a dispute for a completed transaction. Use when an agent or customer believes a transaction was incorrect, unauthorized, or the service was not received.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        transaction_id: {
+          type: 'string',
+          description: 'UUID of the transaction to dispute',
+        },
+        reason: {
+          type: 'string',
+          enum: ['service_not_received', 'duplicate_charge', 'unauthorized', 'amount_incorrect', 'quality_issue', 'other'],
+          description: 'Reason for the dispute',
+        },
+        description: {
+          type: 'string',
+          description: 'Detailed description of the issue',
+        },
+        requested_resolution: {
+          type: 'string',
+          enum: ['full_refund', 'partial_refund', 'credit', 'other'],
+          description: 'What resolution is being requested (optional)',
+        },
+      },
+      required: ['transaction_id', 'reason', 'description'],
+    },
+  },
+  {
+    name: 'escalate_to_human',
+    description: 'Escalate an issue to a human support operator. Use when the issue is too complex for automated resolution, the agent explicitly requests human help, or there is a security concern.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agent_id: {
+          type: 'string',
+          description: 'UUID of the agent (optional)',
+        },
+        reason: {
+          type: 'string',
+          enum: ['complex_issue', 'agent_requested', 'security_concern', 'policy_exception', 'bug_report'],
+          description: 'Why this is being escalated',
+        },
+        summary: {
+          type: 'string',
+          description: 'Summary of the issue for the human operator',
+        },
+        priority: {
+          type: 'string',
+          enum: ['low', 'medium', 'high', 'critical'],
+          description: 'Priority level (default: medium). Critical = 1h response, High = 4h, Medium = 24h, Low = 48h',
+        },
+      },
+      required: ['reason', 'summary'],
+    },
+  },
 ];
