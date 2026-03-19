@@ -385,6 +385,32 @@ export class CircleClient {
   }
 
   /**
+   * Transfer native tokens (ETH) from a developer-controlled wallet.
+   * Discovers the native token ID from wallet balances, then uses the
+   * standard transfer endpoint.
+   */
+  async transferNative(
+    walletId: string,
+    destinationAddress: string,
+    amount: string, // in ETH (e.g., "0.02")
+    feeLevel: 'LOW' | 'MEDIUM' | 'HIGH' = 'MEDIUM'
+  ): Promise<CircleTransaction> {
+    // Discover native token ID from wallet balances
+    const balances = await this.getWalletBalances(walletId);
+    const nativeToken = balances.find(b => b.token.isNative);
+
+    if (!nativeToken) {
+      throw new Error(
+        'No native token found in wallet balances. ' +
+        'The wallet may not have any native token balance.'
+      );
+    }
+
+    console.log(`[Circle] Native token ID: ${nativeToken.token.id} (${nativeToken.token.symbol})`);
+    return this.transferTokens(walletId, nativeToken.token.id, destinationAddress, amount, feeLevel);
+  }
+
+  /**
    * Get a transaction by ID
    */
   async getTransaction(transactionId: string): Promise<CircleTransaction> {

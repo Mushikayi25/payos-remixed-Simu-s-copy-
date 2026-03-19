@@ -1,8 +1,8 @@
 # Sly — Product Requirements Document (PRD)
 
-**Version:** 1.23
-**Date:** March 1, 2026
-**Status:** Agent Contracting Governance + Platform Architecture & Card Networks
+**Version:** 1.26
+**Date:** March 18, 2026
+**Status:** MPP Integration + Production Environment Mode (Revised) + Agent Contracting Governance + Platform Architecture & Card Networks
 
 ---
 
@@ -12,7 +12,7 @@ Sly is a **multi-protocol settlement infrastructure** for LATAM, enabling fintec
 
 1. **Core settlement infrastructure** — Quotes, transfers, multi-currency payouts
 2. **Agent system** — AI agents as first-class actors with KYA verification
-3. **Multi-protocol support** — x402 (Coinbase), AP2 (Google), ACP (Stripe/OpenAI), UCP (Google+Shopify)
+3. **Multi-protocol support** — x402 (Coinbase), AP2 (Google), ACP (Stripe/OpenAI), UCP (Google+Shopify), MPP (Stripe+Tempo)
 4. **Money streaming** — Continuous per-second payments
 5. **Partner dashboard** — Full UI for managing accounts, agents, and payments
 
@@ -20,8 +20,8 @@ Sly is a **multi-protocol settlement infrastructure** for LATAM, enabling fintec
 
 > **"We don't care which protocol wins. Sly makes them all work."**
 
-Four agentic payment protocols are now active (x402, AP2, ACP, UCP). Sly is the **only settlement layer** that:
-- Supports all four protocols
+Five agentic payment protocols are now active (x402, AP2, ACP, UCP, MPP). Sly is the **only settlement layer** that:
+- Supports all five protocols
 - Has native LATAM rails (Pix/SPEI via Circle)
 - Enables partners rather than competing with them
 
@@ -45,6 +45,71 @@ Four agentic payment protocols are now active (x402, AP2, ACP, UCP). Sly is the 
 ---
 
 ## Version History
+
+### Version 1.26 (March 18, 2026)
+**Epic 71: Machine Payments Protocol (MPP) Integration — NEW**
+
+MPP launched March 18, 2026. Co-authored by Stripe and Tempo Labs. IETF submission. Open protocol standardizing HTTP 402 for machine-to-machine payments. Supports multiple payment methods (Tempo stablecoins, Stripe cards, Lightning BTC) and intents (charge, session). 100+ services in directory at launch including OpenAI, Anthropic, Shopify. Tempo mainnet went live simultaneously.
+
+**New Epic:**
+- **Epic 71: MPP Integration** (73 pts, 16 stories, P0) — Four phases:
+  - Phase 1: Client Foundation (30 pts) — mppx SDK, governance middleware, data model, audit trail, wallet provisioning
+  - Phase 2: Sessions/Streaming (18 pts) — governed pay-as-you-go sessions, SSE streaming
+  - Phase 3: Server Integration (13 pts) — accept MPP payments on Sly APIs, payer KYA verification
+  - Phase 4: Dashboard/Discovery (12 pts) — monitoring, service directory, cross-protocol analytics
+
+**Key architectural decisions:**
+- Use official `mppx` SDK (TypeScript, Hono-native) — no custom provider needed
+- Sly wraps `mppx` with governance middleware: policy check before every credential signing
+- Tempo method is primary (permissionless). Stripe method conditional on access approval.
+- Added `settlement_network` column to transfers for chain discrimination
+- MPP is additive to existing protocol support (x402, AP2, ACP, UCP all unchanged)
+
+**Strategic impact:**
+- Sly agents gain access to 100+ paid services without per-service onboarding
+- MPP sessions enable governed streaming payments natively (OAuth for money)
+- Sly fills the governance gap in MPP (no KYA, no spending policies, no kill switch in the spec)
+- Both Tempo hackathon sponsors (Tempo + Stripe) co-authored MPP
+
+**Documentation:**
+- Epic doc: `docs/prd/epics/epic-71-mpp-integration.md`
+- Linear: SLY-477 through SLY-492 (16 stories)
+
+---
+
+### Version 1.25 (March 16, 2026)
+**Epic 67: Production Environment Mode — REVISED to Separate Deployments**
+
+Architecture review of v1.24's column+RLS approach revealed it is unsafe for real money:
+1. Service role key bypasses ALL RLS (primary isolation mechanism was ineffective)
+2. Single EVM private key per server (sandbox and production would share a hot wallet)
+3. Global blockchain routing via env var (not per-request)
+4. Single Circle API key per instance (can't serve sandbox and live from one process)
+5. Rate limiting force-disabled (`true ||` at rate-limit.ts:42)
+
+**Decision:** Separate deployments — two Railway services, same codebase, different env vars. Same Supabase project with environment column for defense-in-depth tagging only.
+
+**Revised from 100 pts / 20 stories → 88 pts / 22 stories:**
+- Phase 1: Foundation (24 pts) — schema migration, server validation middleware, RequestContext, health checks, route stamping, workers
+- Phase 2: Production Guardrails (16 pts) — sandbox-only feature blocks, fix rate limiting, activation gate
+- Phase 3: Infrastructure/DevOps (16 pts) — Railway dual deployment, Vercel config, CORS, secrets docs, CI/CD
+- Phase 4: UI Integration (18 pts) — environment provider + URL switching, header toggle, badges, API keys page
+- Phase 5: Migration & Rollout (14 pts) — verification script, seed updates, defense-in-depth RLS, launch runbook
+
+**Linear changes:** 8 issues canceled/archived, 12 updated, 10 new created (SLY-433 through SLY-442)
+
+---
+
+### Version 1.24 (March 15, 2026)
+**Epic 67: Production Environment Mode — Real Sandbox/Production Isolation (SUPERSEDED by v1.25)**
+
+Original column+RLS approach. See v1.25 for the revised separate-deployments architecture.
+
+**Documentation:**
+- Epic doc: `docs/prd/epics/epic-67-production-environment-mode.md`
+- Linear: SLY-413 through SLY-442
+
+---
 
 ### Version 1.23 (March 1, 2026)
 **Agent Contracting Governance — 5 Epics for Moltbook/OpenClaw Integration**
@@ -397,6 +462,8 @@ Sly is now the **only settlement infrastructure** supporting all three agentic p
 | **63** | **External Reputation Bridge 🛡️** | **5.3** | **P0** | **📋 Planned** | **25** | **0/7** | **[View](./epics/epic-63-external-reputation-bridge.md)** |
 | **64** | **OpenClaw Governance Skill 🧩** | **5.4** | **P1** | **📋 Planned** | **10** | **0/4** | **[View](./epics/epic-64-openclaw-governance-skill.md)** |
 | **38** | **High-Frequency Microtransaction Optimization ⚡** | **5** | **P1** | **📋 Planned** | **63** | **0/18** | **[View](./epics/epic-38-payment-optimized-chains.md)** |
+| **67** | **Production Environment Mode 🛡️** | **5** | **P0** | **📋 Planned** | **100** | **0/20** | **[View](./epics/epic-67-production-environment-mode.md)** |
+| **71** | **MPP Integration 🌐** | **3.5** | **P0** | **📋 Planned** | **73** | **0/16** | **[View](./epics/epic-71-mpp-integration.md)** |
 
 **Summary:**
 - **Foundation Complete:** Epics 1-16 (Phase 1-2) fully implemented
@@ -421,24 +488,34 @@ Sly is now the **only settlement infrastructure** supporting all three agentic p
 - **Next Priority:** ~135 points (Epics 51-53)
 - **Agent Contracting:** ~148 points (Epics 18, 29, 62-64)
 - **AI-Native Remaining:** Epic 32 (Tool Discovery)
-- **Production Hardening:** Epics 44-46 (Observability, Webhooks, DR) — placeholders for scale phase
+- **Production Hardening:** Epic 67 (Environment Mode, 88 pts — separate deployments), Epics 44-46 (Observability, Webhooks, DR)
+- **MPP Integration:** Epic 71 (73 pts, 16 stories) — Governed client + server for Machine Payments Protocol (Stripe + Tempo)
 
 ---
 
 ## Strategic Context
 
-### The Agentic Payments Landscape (January 2026)
+### The Agentic Payments Landscape (March 2026)
 
-Four major protocols have emerged for AI agent payments:
+Five major protocols have emerged for AI agent payments:
 
 | Protocol | Owner | Focus | Settlement Method | Status |
 |----------|-------|-------|-------------------|--------|
 | **x402** | Coinbase/Cloudflare | Micropayments, API monetization | Stablecoin (USDC on Base) | Production |
 | **AP2** | Google (60+ partners) | Agent authorization, mandates | Multi-rail (cards, banks, x402) | Production |
 | **ACP** | Stripe/OpenAI | Consumer checkout, e-commerce | SharedPaymentToken | Production |
-| **UCP** | Google+Shopify (20+ partners) | Full commerce lifecycle | Multi-handler (AP2, cards, wallets) | **NEW** (Jan 11, 2026) |
+| **UCP** | Google+Shopify (20+ partners) | Full commerce lifecycle | Multi-handler (AP2, cards, wallets) | Production (Jan 11, 2026) |
+| **MPP** | Stripe+Tempo (IETF submission) | Machine-to-machine payments | Multi-method (Tempo, Stripe, Card, Lightning) | **NEW** (Mar 18, 2026) |
 
-**Key Insight:** UCP is a **superset** protocol that orchestrates x402/AP2/ACP rather than replacing them. It defines the full shopping journey (Discovery → Checkout → Order → Post-purchase) and supports multiple transports (REST, MCP, A2A). Sly's multi-protocol strategy is validated—we're the settlement layer, not picking winners.
+**Key Insight:** UCP is a **superset** protocol that orchestrates x402/AP2/ACP rather than replacing them. MPP is the newest entrant, co-authored by Stripe and Tempo, standardizing HTTP 402 for programmatic payments with 100+ services at launch. Sly's multi-protocol strategy is validated — we're the governance layer, not picking winners.
+
+**MPP Ecosystem Impact:**
+- 100+ services in directory at launch (OpenAI, Anthropic, Shopify, Dune, Alchemy, fal.ai)
+- Tempo mainnet launched simultaneously (sub-second finality, stablecoin-native fees)
+- Stripe, Visa, and Lightspark extended MPP to cards, wallets, and Lightning
+- Sessions primitive enables streaming/pay-as-you-go (OAuth for money)
+- MCP transport binding means LLM-native payments
+- MPP has NO governance layer — Sly fills the gap (Epic 71)
 
 **UCP Ecosystem Impact:**
 - Google AI Mode and Gemini will use UCP for shopping agents
@@ -513,7 +590,7 @@ Four major protocols have emerged for AI agent payments:
 ### Direct Competitors
 
 | Company | Funding | Focus | Revenue Model | What They Don't Do |
-|---------|---------|-------|---------------|--------------------|
+|---------|---------|-------|---------------|---------------------|
 | **Crossmint** | $23.6M | Multi-protocol wallets | Subscription + per-tx | No LATAM rails, competes with partners |
 | **Skyfire** | $9.5M | Agent identity (KYA) | 2-3% per transaction | No settlement, no white-label |
 | **Gr4vy** | ~$30M | Payment orchestration | SaaS + revenue share | Not stablecoin-native, no LATAM |
@@ -534,7 +611,7 @@ Four major protocols have emerged for AI agent payments:
 ### Brazil (New Nov 2025 Regulations)
 
 | Requirement | Details |
-|-------------|--------|
+|-------------|---------|
 | **License** | SPSAV (Sociedade Prestadora de Serviços de Ativos Virtuais) |
 | **Effective** | February 2, 2026 |
 | **Capital** | $2-7M depending on activity |
@@ -546,7 +623,7 @@ Four major protocols have emerged for AI agent payments:
 ### Mexico
 
 | Requirement | Details |
-|-------------|--------|
+|-------------|---------|
 | **License** | ITF (Institución de Tecnología Financiera) under Fintech Law (2018) |
 | **Regulator** | CNBV (authorization), Banxico (operations) |
 | **Capital** | ~$500K USD equivalent |
@@ -616,82 +693,6 @@ Sly's Identity 3 positioning as "AI-Native Settlement OS" requires infrastructur
 3. **Composable workflows** — Same primitives serve procurement, batch payments, compliance
 4. **Capability discovery** — Agent platforms need to understand what Sly can do
 
-### Composable Primitives Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              PARTNER APPLICATIONS                                │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐            │
-│  │ Procurement  │ │   Payroll    │ │  Accounting  │ │  CS/Support  │            │
-│  │    Agent     │ │   Platform   │ │   Software   │ │    Agent     │            │
-│  └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘            │
-└─────────────────────────────────────────────────────────────────────────────────┘
-                                        │
-                                        ▼
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                        TOOL DISCOVERY (Epic 32)                                  │
-│         "What can Sly do?" → Capabilities, schemas, limits                     │
-└─────────────────────────────────────────────────────────────────────────────────┘
-                                        │
-                                        ▼
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                           AI-NATIVE LAYER                                        │
-│                                                                                  │
-│  ┌─────────────────────────────────────────────────────────────────────────┐    │
-│  │                     STRUCTURED RESPONSES (Epic 30)                       │    │
-│  │    Machine-parseable errors │ Suggested actions │ Retry guidance         │    │
-│  └─────────────────────────────────────────────────────────────────────────┘    │
-│                                                                                  │
-│  ┌─────────────────────────────────────────────────────────────────────────┐    │
-│  │                      SIMULATION ENGINE (Epic 28)                         │    │
-│  │         Dry-run any action │ Preview outcomes │ Validate batches         │    │
-│  └─────────────────────────────────────────────────────────────────────────┘    │
-│                                                                                  │
-│  ┌─────────────────────────────────────────────────────────────────────────┐    │
-│  │                       WORKFLOW ENGINE (Epic 29)                          │    │
-│  │    Approval chains │ Conditional logic │ Multi-step processes            │    │
-│  │    ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐          │    │
-│  │    │  Approval  │ │ Condition  │ │   Action   │ │   Wait     │          │    │
-│  │    │    Step    │ │    Step    │ │    Step    │ │   Step     │          │    │
-│  │    └────────────┘ └────────────┘ └────────────┘ └────────────┘          │    │
-│  └─────────────────────────────────────────────────────────────────────────┘    │
-│                                                                                  │
-│  ┌─────────────────────────────────────────────────────────────────────────┐    │
-│  │                        CONTEXT API (Epic 31)                             │    │
-│  │      "Tell me everything about X" │ Account │ Transfer │ Agent           │    │
-│  └─────────────────────────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────────────────────┘
-                                        │
-                                        ▼
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                          DATA ENRICHMENT LAYER                                   │
-│  ┌───────────────────┐ ┌───────────────────┐ ┌───────────────────┐              │
-│  │   METADATA SCHEMA │ │    TRANSACTION    │ │      ENTITY       │              │
-│  │     (Epic 33)     │ │   DECOMPOSITION   │ │    ONBOARDING     │              │
-│  │  Custom fields    │ │     (Epic 34)     │ │     (Epic 35)     │              │
-│  │  GL codes, PO#s   │ │  Line items       │ │  Single-call      │              │
-│  └───────────────────┘ │  Partial refunds  │ │  vendor setup     │              │
-│                        └───────────────────┘ └───────────────────┘              │
-└─────────────────────────────────────────────────────────────────────────────────┘
-                                        │
-                                        ▼
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                          CORE SETTLEMENT LAYER                                   │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐            │
-│  │  Protocol   │  │  Execution  │  │  Treasury   │  │ Compliance  │            │
-│  │ Orchestrator│  │   Engine    │  │  & Float    │  │  & KYC/KYA  │            │
-│  │x402/AP2/ACP/UCP│  │             │  │             │  │             │            │
-│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘            │
-└─────────────────────────────────────────────────────────────────────────────────┘
-                                        │
-                                        ▼
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              SETTLEMENT RAILS                                    │
-│      Circle USDC      │      Pix (Brazil)      │      SPEI (Mexico)             │
-│       Base Chain      │    BCB Real-time       │    Banxico Real-time           │
-└─────────────────────────────────────────────────────────────────────────────────┘
-```
-
 ### How Primitives Compose
 
 | Scenario | Primitives Used | Flow |
@@ -733,50 +734,6 @@ The OpenClaw/Moltbook ecosystem (140K+ GitHub stars, 1.5M+ agents) enables auton
 
 Sly fills this gap as the **governed settlement layer** that enterprises install between their agents and the contracting ecosystem.
 
-#### Agent Contracting Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    MOLTBOOK / OPENCLAW ECOSYSTEM                     │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                 │
-│  │   m/hire     │  │  ClaWork    │  │  A2A Tasks  │                 │
-│  │  Job Board   │  │  Contracts  │  │  (Epic 57)  │                 │
-│  └──────┬───────┘  └──────┬──────┘  └──────┬──────┘                 │
-└─────────┼─────────────────┼────────────────┼────────────────────────┘
-          │                 │                │
-          ▼                 ▼                ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│              SLY GOVERNANCE LAYER (Epics 18, 29, 62-64)             │
-│                                                                      │
-│  ┌───────────────────────────────────────────────────────────────┐  │
-│  │              OpenClaw Governance Skill (Epic 64)               │  │
-│  │   Contract Discovery → Negotiation → Escrow → Settlement      │  │
-│  └───────────────────────────────────────────────────────────────┘  │
-│                                │                                     │
-│  ┌──────────────────┐  ┌──────┴───────────┐  ┌──────────────────┐  │
-│  │  Contract Policy  │  │     Workflow     │  │    Reputation    │  │
-│  │  Engine (Epic 18) │  │  Engine (Epic 29)│  │  Bridge (Epic 63)│  │
-│  │  Per-counterparty │  │  Approval chains │  │  ERC-8004        │  │
-│  │  limits, type     │  │  Condition logic │  │  Mnemom          │  │
-│  │  restrictions,    │  │  Timeout/escalate│  │  Vouched/MCP-I   │  │
-│  │  reputation gate  │  │                  │  │  Escrow history  │  │
-│  └──────────────────┘  └──────────────────┘  └──────────────────┘  │
-│                                │                                     │
-│  ┌───────────────────────────────────────────────────────────────┐  │
-│  │              Escrow Orchestration (Epic 62)                    │  │
-│  │  Pre-authorization → On-chain lock → Lifecycle monitor →      │  │
-│  │  Release governance → Kill switch → Settlement to Pix/SPEI   │  │
-│  └───────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                         SETTLEMENT RAILS                             │
-│    Circle USDC     │     Pix (Brazil)    │    SPEI (Mexico)         │
-│    Base Chain      │     BCB Real-time   │    Banxico Real-time     │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
 #### Agent Contracting Epics Summary
 
 | Epic | Name | Points | Priority | Status |
@@ -816,64 +773,6 @@ Sprint 3 (Weeks 5-6): Epic 62 P1 + Epic 29 P2 + Epic 64          ~33 pts
 | **Base Sepolia** | Testnet for on-chain tx | ✅ Yes (faucet) | Free | Low (1 day) |
 | **Chainalysis/Elliptic** | Compliance screening | ✅ Yes | Free tier | Low (1 day) |
 
-### Circle Sandbox Checklist
-
-```
-[ ] Create Circle sandbox account (circle.com/developers)
-[ ] Generate sandbox API keys
-[ ] Store keys in environment variables:
-    CIRCLE_API_KEY=xxx
-    CIRCLE_API_URL=https://api-sandbox.circle.com
-[ ] Create test USDC wallet
-[ ] Test deposit flow (sandbox USDC)
-[ ] Test Pix payout (Brazil sandbox)
-[ ] Test SPEI payout (Mexico sandbox)
-[ ] Implement webhook handler for status updates
-[ ] Test FX quote flow (USD → BRL, USD → MXN)
-```
-
-### Coinbase/x402 Sandbox Checklist
-
-```
-[ ] Set up Base Sepolia wallet
-[ ] Get testnet ETH from faucet (sepolia.base.org)
-[ ] Get testnet USDC from faucet
-[ ] Install x402 packages:
-    npm install @x402/express-middleware @x402/client
-[ ] Register test x402 endpoint
-[ ] Execute test payment with @x402/client
-[ ] Verify payment in dashboard
-[ ] Connect offramp to Circle sandbox
-```
-
-### Google AP2 Sandbox Checklist
-
-```
-[ ] Clone AP2 reference: github.com/google-agentic-commerce/AP2
-[ ] Set up Vertex AI or Google API key
-[ ] Run sample scenarios locally:
-    cd samples/python/scenarios/<scenario>
-    bash run.sh
-[ ] Implement mandate verification in Sly
-[ ] Test IntentMandate → CartMandate → PaymentMandate flow
-[ ] Verify A2A x402 extension for crypto payments
-```
-
-### Stripe ACP Sandbox Checklist
-
-```
-[ ] Enable Stripe test mode
-[ ] Review ACP spec: agenticcommerce.dev
-[ ] Implement checkout endpoints:
-    POST /acp/checkout (CreateCheckoutRequest)
-    PATCH /acp/checkout/:id (UpdateCheckoutRequest)
-    POST /acp/checkout/:id/complete (CompleteCheckoutRequest)
-    DELETE /acp/checkout/:id (CancelCheckoutRequest)
-[ ] Integrate SharedPaymentToken handling
-[ ] Test with Stripe test cards
-[ ] Connect to Circle for LATAM settlement
-```
-
 ### Integration Testing Scenarios
 
 | Scenario | Protocol | Expected Flow |
@@ -882,12 +781,14 @@ Sprint 3 (Weeks 5-6): Epic 62 P1 + Epic 29 P2 + Epic 64          ~33 pts
 | Shopping agent | ACP | Checkout created → SPT received → Settlement to Brazil |
 | Procurement | AP2 | Mandate verified → Payment executed → SPEI payout |
 | Multi-protocol | All | Different protocols route to same settlement engine |
+| Machine payment | MPP | Agent hits 402 → Sly checks policy → credential signed → receipt → audit logged |
 
 ---
 
 ## Quick Links
 
 ### Epic Documentation
+- **[Epic 71: MPP Integration](./epics/epic-71-mpp-integration.md)** 📋 **Planned** — Governed client + server for Machine Payments Protocol (73 pts)
 - **[Epic 62: Escrow Orchestration](./epics/epic-62-escrow-orchestration.md)** 📋 **Planned** — Agent contract escrow with governance
 - **[Epic 63: External Reputation Bridge](./epics/epic-63-external-reputation-bridge.md)** 📋 **Planned** — Unified trust score from ERC-8004, Mnemom, Vouched
 - **[Epic 64: OpenClaw Governance Skill](./epics/epic-64-openclaw-governance-skill.md)** 📋 **Planned** — ClawHub skill for governed contracting

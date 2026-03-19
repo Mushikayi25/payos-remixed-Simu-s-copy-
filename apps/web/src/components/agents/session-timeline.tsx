@@ -189,6 +189,41 @@ function getEventVisual(event: TimelineEvent): EventVisual {
             description: 'Funds returned to caller',
             expandable: true,
           };
+        case 'payment_requested': {
+          const prAmount = data.amount as number;
+          const prCurrency = (data.currency as string) || 'USDC';
+          return {
+            icon: <AlertTriangle className="h-3.5 w-3.5" />,
+            colorClass: 'text-orange-600 dark:text-orange-400',
+            dotColor: 'text-orange-500',
+            label: 'Payment Requested',
+            description: `${formatCurrency(prAmount, prCurrency)} required`,
+            expandable: true,
+          };
+        }
+        case 'payment_verified': {
+          const pvType = data.paymentType as string;
+          return {
+            icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+            colorClass: 'text-emerald-600 dark:text-emerald-400',
+            dotColor: 'text-emerald-500',
+            label: 'Payment Verified',
+            description: pvType ? `Via ${pvType}` : 'Payment confirmed',
+            expandable: true,
+          };
+        }
+        case 'transfer_created': {
+          const tcAmount = data.amount as number;
+          const tcCurrency = (data.currency as string) || 'USDC';
+          return {
+            icon: <ArrowRightLeft className="h-3.5 w-3.5" />,
+            colorClass: 'text-emerald-600 dark:text-emerald-400',
+            dotColor: 'text-emerald-500',
+            label: 'Transfer Created',
+            description: `${formatCurrency(tcAmount, tcCurrency)} settled`,
+            expandable: true,
+          };
+        }
         default:
           return {
             icon: <DollarSign className="h-3.5 w-3.5" />,

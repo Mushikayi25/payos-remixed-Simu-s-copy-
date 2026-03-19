@@ -89,6 +89,8 @@ import usageRouter from './routes/usage.js';
 import agentWalletsRouter from './routes/agent-wallets.js';
 import betaAdminRouter from './routes/beta-admin.js';
 import reputationRouter from './routes/reputation.js';
+import mppRouter from './routes/mpp.js';
+import compositionRouter from './routes/composition.js';
 
 const app = new Hono();
 
@@ -341,6 +343,8 @@ v1.route('/portal-tokens', portalTokensRouter); // Portal token CRUD (Epic 65)
 v1.route('/usage', usageRouter); // Usage API (Epic 65)
 v1.route('/agents', agentWalletsRouter); // Agent wallet policy & exposure (Epic 18)
 v1.route('/reputation', reputationRouter); // Reputation bridge (Epic 63)
+v1.route('/mpp', mppRouter); // Machine Payments Protocol (Epic 71)
+v1.route('/composition', compositionRouter); // Multi-protocol composition (Epic 71)
 // NOTE: Removed catch-all payment-methods mount to prevent route conflicts
 // Payment methods are already accessible at /v1/payment-methods
 // Account-specific payment methods handled via accounts router

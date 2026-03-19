@@ -14,7 +14,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { trackOp } from '../ops/track-op.js';
 import { OpType } from '../ops/operation-types.js';
 
-export type TaskStreamEventType = 'status' | 'message' | 'artifact' | 'error' | 'payment' | 'timeout' | 'webhook';
+export type TaskStreamEventType = 'status' | 'message' | 'artifact' | 'error' | 'payment' | 'timeout' | 'webhook' | 'acceptance' | 'feedback';
 
 export interface TaskStreamEvent {
   type: TaskStreamEventType;

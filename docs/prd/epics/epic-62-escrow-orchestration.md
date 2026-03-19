@@ -3,8 +3,8 @@
 **Status:** Pending
 **Phase:** 5.3 (Agent Contracting)
 **Priority:** P0 — Trustless Payment for Agent Contracts
-**Estimated Points:** 41
-**Stories:** 10 (0 complete)
+**Estimated Points:** 44
+**Stories:** 11 (0 complete)
 **Dependencies:** Epic 18 (Agent Wallets), Epic 29 (Workflow Engine), Epic 40 (Circle Sandbox ✅)
 **Created:** March 1, 2026
 
@@ -392,7 +392,7 @@ sly.escrows = {
 **Priority:** Medium
 
 **Description:**
-When an escrow reaches a terminal state (released, disputed, expired), emit a structured reputation event to the `escrow_events` table with `reputation_relevant: true`. This is the "write side" that Epic 63 Story 63.5 reads from — making the implicit link between escrow outcomes and reputation scoring explicit.
+When an escrow reaches a terminal state (released, disputed, expired), emit a structured reputation event to the `escrow_events` table with `reputation_relevant: true`. This is the "write side" that Story 62.11 reads from — making the implicit link between escrow outcomes and reputation scoring explicit.
 
 **Event payload:**
 ```json
@@ -415,9 +415,42 @@ When an escrow reaches a terminal state (released, disputed, expired), emit a st
 - [ ] Terminal state events (released, disputed, expired) include `reputation_relevant: true`
 - [ ] Event metadata includes outcome, counterparty IDs, amount, duration
 - [ ] Disputed escrows include `dispute_reason` if available
-- [ ] Epic 63 Story 63.5 can query `escrow_events WHERE reputation_relevant = true`
+- [ ] Story 62.11 can query `escrow_events WHERE reputation_relevant = true`
 - [ ] No new tables — extends existing `escrow_events` with metadata fields
 - [ ] Frozen → released transitions also emit reputation event
+
+---
+
+### Story 62.11: Escrow History Reputation Source
+
+**Points:** 3
+**Priority:** P0
+**Moved from:** Epic 63 Story 63.5 (escrow history belongs with escrow orchestration)
+
+**Description:**
+Read escrow completion history from AgentEscrowProtocol contract on Base and from the `escrow_events` table (written by Story 62.10). This is the "read side" complement to 62.10's "write side" — together they close the loop between escrow outcomes and reputation scoring. Feeds into Epic 63's Unified Trust Score Calculator as the `payment_reliability` dimension (30% weight).
+
+**Implementation:**
+- Read `EscrowCompleted` and `EscrowDisputed` events from AgentEscrowProtocol contract on Base
+- Also read reputation-relevant events from `escrow_events` table (`WHERE reputation_relevant = true`, written by Story 62.10)
+- Calculate: completion rate, average escrow value, dispute frequency, total volume
+- Return as `payment_reliability` dimension (30% weight in unified trust score)
+- Results cached with 5-minute TTL
+
+**Dependencies:** 62.4 (lifecycle monitor populates `escrow_events`), 62.10 (writes `reputation_relevant: true` events)
+
+**Files:**
+- New: `apps/api/src/services/escrow/history-reputation-source.ts`
+
+**Acceptance Criteria:**
+- [ ] Reads EscrowCompleted and EscrowDisputed events from AgentEscrowProtocol contract
+- [ ] Reads reputation-relevant events from `escrow_events` table (written by 62.10)
+- [ ] Calculates completion rate (completed / total)
+- [ ] Calculates dispute frequency (disputed / total)
+- [ ] Tracks average escrow value and total volume
+- [ ] Results cached with 5-minute TTL
+- [ ] Handles agents with no escrow history (returns `data_points: 0`)
+- [ ] Exposes data in format consumable by Epic 63 trust score calculator
 
 ---
 
@@ -427,8 +460,8 @@ When an escrow reaches a terminal state (released, disputed, expired), emit a st
 |-------|---------|--------|
 | Phase 1: Foundation | 62.1–62.6 | 26 |
 | Phase 2: Settlement & UI | 62.7–62.9 | 12 |
-| Phase 3: Cross-Epic Integration | 62.10 | 3 |
-| **Total** | **10** | **41** |
+| Phase 3: Cross-Epic Integration | 62.10–62.11 | 6 |
+| **Total** | **11** | **44** |
 
 ---
 
@@ -443,7 +476,7 @@ Phase 1: Foundation (62.1-62.6)
     ↓
 Phase 2: Settlement & UI (62.7-62.9)    ← Depends on Phase 1
     ↓
-Phase 3: Cross-Epic Integration (62.10)  ← Depends on 62.4 (lifecycle monitor)
+Phase 3: Cross-Epic Integration (62.10-62.11)  ← 62.10 depends on 62.4; 62.11 depends on 62.4 + 62.10
 ```
 
 ---

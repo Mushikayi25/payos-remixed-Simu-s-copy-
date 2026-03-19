@@ -464,22 +464,58 @@ export default function WalletDetailPage() {
                                     <span className="text-sm text-gray-500">Network</span>
                                     <span className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2">
                                         <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                                        Base Sepolia
+                                        {wallet.network || 'Unknown'}
                                     </span>
                                 </div>
+
+                                {wallet.blockchain && (
+                                    <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-800">
+                                        <span className="text-sm text-gray-500">Blockchain</span>
+                                        <span className="text-sm font-medium text-gray-900 dark:text-white capitalize">
+                                            {wallet.blockchain}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {wallet.provider && wallet.provider !== 'payos' && (
+                                    <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-800">
+                                        <span className="text-sm text-gray-500">Provider</span>
+                                        <span className="text-sm font-medium text-gray-900 dark:text-white capitalize">
+                                            {wallet.provider}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {wallet.tokenContract && (
+                                    <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-800">
+                                        <span className="text-sm text-gray-500">Token Contract</span>
+                                        <span className="text-sm font-mono text-gray-900 dark:text-white">
+                                            {wallet.tokenContract.slice(0, 6)}...{wallet.tokenContract.slice(-4)}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {wallet.currency && (
+                                    <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-800">
+                                        <span className="text-sm text-gray-500">Currency</span>
+                                        <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                            {wallet.currency}
+                                        </span>
+                                    </div>
+                                )}
 
                                 {onChain ? (
                                     <>
                                         <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-800">
                                             <span className="text-sm text-gray-500">Native Balance</span>
                                             <span className="text-sm font-mono text-gray-900 dark:text-white">
-                                                {parseFloat(onChain.native).toFixed(4)} ETH
+                                                {parseFloat(onChain.native).toFixed(4)} {wallet.blockchain === 'tempo' ? 'TEMPO' : 'ETH'}
                                             </span>
                                         </div>
                                         <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-800">
-                                            <span className="text-sm text-gray-500">USDC Balance</span>
+                                            <span className="text-sm text-gray-500">{wallet.currency || 'USDC'} Balance</span>
                                             <span className="text-sm font-mono text-gray-900 dark:text-white">
-                                                ${parseFloat(onChain.usdc).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                                {parseFloat(onChain.usdc).toLocaleString('en-US', { minimumFractionDigits: 2 })} {wallet.currency || 'USDC'}
                                             </span>
                                         </div>
                                     </>
@@ -491,16 +527,23 @@ export default function WalletDetailPage() {
 
                                 <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-800">
                                     <span className="text-sm text-gray-500">Block Explorer</span>
-                                    {wallet.walletAddress && (
-                                        <a
-                                            href={`https://sepolia.basescan.org/address/${wallet.walletAddress}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-sm text-blue-600 hover:underline flex items-center gap-1"
-                                        >
-                                            View <ExternalLink className="w-3 h-3" />
-                                        </a>
-                                    )}
+                                    {wallet.walletAddress && (() => {
+                                        const explorerUrl = wallet.blockchain === 'tempo'
+                                            ? (wallet.network === 'tempo-testnet'
+                                                ? `https://moderato.tempo.xyz/address/${wallet.walletAddress}`
+                                                : `https://explorer.tempo.xyz/address/${wallet.walletAddress}`)
+                                            : `https://sepolia.basescan.org/address/${wallet.walletAddress}`;
+                                        return (
+                                            <a
+                                                href={explorerUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-sm text-blue-600 hover:underline flex items-center gap-1"
+                                            >
+                                                View <ExternalLink className="w-3 h-3" />
+                                            </a>
+                                        );
+                                    })()}
                                 </div>
 
                                 {/* Placeholder for on-chain transactions */}

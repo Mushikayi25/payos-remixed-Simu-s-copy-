@@ -92,6 +92,14 @@ const agenticPaymentsChildren = [
       { href: '/dashboard/agentic-payments/x402/integration', label: 'Integration', icon: Code },
     ]
   },
+  {
+    label: 'MPP',
+    icon: DollarSign,
+    children: [
+      { href: '/dashboard/agentic-payments/mpp', label: 'Overview', icon: LayoutDashboard },
+      { href: '/dashboard/agentic-payments/mpp/sessions', label: 'Sessions', icon: Activity },
+    ]
+  },
 ];
 
 const configurationNav = [

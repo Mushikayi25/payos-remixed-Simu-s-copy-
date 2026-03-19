@@ -1727,13 +1727,15 @@ a2aRouter.get('/sessions/:contextId', async (c) => {
       .select('id, task_id, role, parts, created_at')
       .in('task_id', taskIds)
       .eq('tenant_id', ctx.tenantId)
-      .order('created_at', { ascending: true }),
+      .order('created_at', { ascending: true })
+      .limit(10000),
     supabase
       .from('a2a_artifacts')
       .select('id, task_id, label, mime_type, parts, created_at')
       .in('task_id', taskIds)
       .eq('tenant_id', ctx.tenantId)
-      .order('created_at', { ascending: true }),
+      .order('created_at', { ascending: true })
+      .limit(10000),
     (() => {
       const transferIds = taskRows.map((r: any) => r.transfer_id).filter(Boolean) as string[];
       if (transferIds.length === 0) return Promise.resolve({ data: [] });
@@ -1748,7 +1750,8 @@ a2aRouter.get('/sessions/:contextId', async (c) => {
       .select('id, task_id, event_type, from_state, to_state, actor_type, actor_id, data, duration_ms, created_at')
       .in('task_id', taskIds)
       .eq('tenant_id', ctx.tenantId)
-      .order('created_at', { ascending: true }),
+      .order('created_at', { ascending: true })
+      .limit(10000),
   ]);
 
   const messages = messagesResult.data || [];
@@ -1875,7 +1878,8 @@ a2aRouter.get('/sessions', async (c) => {
     .select('id, context_id, state, direction, agent_id, client_agent_id, transfer_id, created_at, updated_at, agents!inner(name)')
     .eq('tenant_id', ctx.tenantId)
     .not('context_id', 'is', null)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(10000);
 
   if (error) {
     return c.json({ error: `Failed to fetch sessions: ${error.message}` }, 500);
@@ -1892,32 +1896,58 @@ a2aRouter.get('/sessions', async (c) => {
   }
 
   // Batch fetch transfer amounts for all linked transfers
+  // Chunk .in() to avoid PostgREST URL length limits with many IDs
   const allTransferIds = rows
     .map((r: any) => r.transfer_id)
     .filter(Boolean) as string[];
   const transferAmounts = new Map<string, number>();
   if (allTransferIds.length > 0) {
-    const { data: transfers } = await supabase
-      .from('transfers')
-      .select('id, amount')
-      .in('id', allTransferIds)
-      .eq('tenant_id', ctx.tenantId);
-    for (const t of transfers || []) {
-      transferAmounts.set(t.id, Number(t.amount) || 0);
+    const T_CHUNK = 100;
+    const tChunks: string[][] = [];
+    for (let i = 0; i < allTransferIds.length; i += T_CHUNK) {
+      tChunks.push(allTransferIds.slice(i, i + T_CHUNK));
+    }
+    const tResults = await Promise.all(
+      tChunks.map(chunk =>
+        supabase
+          .from('transfers')
+          .select('id, amount')
+          .in('id', chunk)
+          .eq('tenant_id', ctx.tenantId)
+      )
+    );
+    for (const { data: transfers } of tResults) {
+      for (const t of transfers || []) {
+        transferAmounts.set(t.id, Number(t.amount) || 0);
+      }
     }
   }
 
   // Batch fetch message counts for all tasks
+  // Note: .in() sends UUIDs as URL query params — with many tasks this exceeds
+  // PostgREST's URL length limit (~8KB). Chunk into batches of 100.
   const allTaskIds = rows.map((r: any) => r.id);
   const messageCounts = new Map<string, number>();
   if (allTaskIds.length > 0) {
-    const { data: messages } = await supabase
-      .from('a2a_messages')
-      .select('task_id')
-      .in('task_id', allTaskIds)
-      .eq('tenant_id', ctx.tenantId);
-    for (const m of messages || []) {
-      messageCounts.set(m.task_id, (messageCounts.get(m.task_id) || 0) + 1);
+    const CHUNK_SIZE = 100;
+    const chunks: string[][] = [];
+    for (let i = 0; i < allTaskIds.length; i += CHUNK_SIZE) {
+      chunks.push(allTaskIds.slice(i, i + CHUNK_SIZE));
+    }
+    const chunkResults = await Promise.all(
+      chunks.map(chunk =>
+        supabase
+          .from('a2a_messages')
+          .select('task_id')
+          .in('task_id', chunk)
+          .eq('tenant_id', ctx.tenantId)
+          .limit(10000)
+      )
+    );
+    for (const { data: messages } of chunkResults) {
+      for (const m of messages || []) {
+        messageCounts.set(m.task_id, (messageCounts.get(m.task_id) || 0) + 1);
+      }
     }
   }
 

@@ -437,11 +437,15 @@ export class ContractPolicyEngine {
     try {
       const { data } = await this.supabase
         .from('reputation_scores')
-        .select('composite_score')
+        .select('unified_score')
         .eq('agent_id', agentId)
         .maybeSingle();
 
-      return data?.composite_score ?? null;
+      // unified_score is 0-1000; normalize to 0-1 for policy comparison
+      if (data?.unified_score != null) {
+        return data.unified_score / 1000;
+      }
+      return null;
     } catch {
       // reputation_scores table may not exist yet (Epic 63 not deployed)
       return null;

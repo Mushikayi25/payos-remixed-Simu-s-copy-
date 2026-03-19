@@ -2399,6 +2399,148 @@ agents.delete('/:id/endpoint', async (c) => {
 });
 
 // ============================================
+// GET /v1/agents/:id/wallet - Get agent wallet details
+// ============================================
+agents.get('/:id/wallet', async (c) => {
+  const ctx = c.get('ctx');
+  const id = c.req.param('id');
+  const supabase = createClient();
+
+  if (!isValidUUID(id)) {
+    throw new ValidationError('Invalid agent ID format');
+  }
+
+  // Verify agent exists
+  const { data: agent, error: agentError } = await supabase
+    .from('agents')
+    .select('id, name')
+    .eq('id', id)
+    .eq('tenant_id', ctx.tenantId)
+    .single();
+
+  if (agentError || !agent) {
+    throw new NotFoundError('Agent', id);
+  }
+
+  // Fetch all wallets managed by this agent
+  const { data: wallets } = await supabase
+    .from('wallets')
+    .select('*')
+    .eq('managed_by_agent_id', id)
+    .eq('tenant_id', ctx.tenantId)
+    .eq('status', 'active')
+    .order('created_at', { ascending: false });
+
+  if (!wallets || wallets.length === 0) {
+    return c.json(null);
+  }
+
+  // Return the primary wallet (prefer Tempo, then Circle, then internal)
+  const sorted = [...wallets].sort((a, b) => {
+    const priority = (w: any) => {
+      if (w.provider === 'tempo') return 0;
+      if (w.provider === 'circle') return 1;
+      return 2;
+    };
+    return priority(a) - priority(b);
+  });
+
+  const primary = sorted[0];
+  return c.json({
+    id: primary.id,
+    name: primary.name,
+    balance: parseFloat(primary.balance),
+    currency: primary.currency,
+    network: primary.network,
+    status: primary.status,
+    address: primary.wallet_address,
+    wallet_address: primary.wallet_address,
+    wallet_type: primary.wallet_type,
+    blockchain: primary.blockchain,
+    provider: primary.provider,
+    token_contract: primary.token_contract,
+    spending_policy: primary.spending_policy,
+    all_wallets: sorted.map((w: any) => ({
+      id: w.id,
+      name: w.name,
+      balance: parseFloat(w.balance),
+      currency: w.currency,
+      network: w.network,
+      status: w.status,
+      address: w.wallet_address,
+      wallet_type: w.wallet_type,
+      blockchain: w.blockchain,
+      provider: w.provider,
+    })),
+  });
+});
+
+// ============================================
+// GET /v1/agents/:id/wallet/exposures - Counterparty exposures
+// ============================================
+agents.get('/:id/wallet/exposures', async (c) => {
+  const ctx = c.get('ctx');
+  const id = c.req.param('id');
+  const supabase = createClient();
+
+  if (!isValidUUID(id)) {
+    throw new ValidationError('Invalid agent ID format');
+  }
+
+  // Aggregate exposure data from completed MPP transfers for this agent
+  const { data: transfers } = await supabase
+    .from('transfers')
+    .select('to_account_id, amount, currency, created_at')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('type', 'mpp')
+    .eq('status', 'completed')
+    .or(`from_account_id.eq.${id},protocol_metadata->>agent_id.eq.${id}`)
+    .order('created_at', { ascending: false });
+
+  if (!transfers || transfers.length === 0) {
+    return c.json({ data: [], exposures: [] });
+  }
+
+  const now = Date.now();
+  const day = 24 * 60 * 60 * 1000;
+  const exposureMap = new Map<string, any>();
+
+  for (const t of transfers) {
+    const cp = t.to_account_id || 'unknown';
+    const existing = exposureMap.get(cp) || {
+      counterparty_id: cp,
+      volume_24h: 0, volume_7d: 0, volume_30d: 0,
+      total_volume: 0, active_contracts: 0, active_escrows: 0,
+    };
+    const amt = Number(t.amount) || 0;
+    const age = now - new Date(t.created_at).getTime();
+    if (age <= day) existing.volume_24h += amt;
+    if (age <= 7 * day) existing.volume_7d += amt;
+    if (age <= 30 * day) existing.volume_30d += amt;
+    existing.total_volume += amt;
+    exposureMap.set(cp, existing);
+  }
+
+  const exposures = Array.from(exposureMap.values());
+  return c.json({ data: exposures, exposures });
+});
+
+// ============================================
+// GET /v1/agents/:id/wallet/policy/evaluations - Policy evaluation log
+// ============================================
+agents.get('/:id/wallet/policy/evaluations', async (c) => {
+  const ctx = c.get('ctx');
+  const id = c.req.param('id');
+
+  if (!isValidUUID(id)) {
+    throw new ValidationError('Invalid agent ID format');
+  }
+
+  // Return empty until policy evaluation logging is implemented
+  return c.json({ data: [], evaluations: [], total: 0, pagination: { page: 1, limit: 20, total: 0 } });
+});
+
+// ============================================
 // POST /v1/agents/:id/wallet - Link wallet address
 // Epic 61.1: Agent BYOW (Bring Your Own Wallet)
 // ============================================

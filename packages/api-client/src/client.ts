@@ -99,6 +99,12 @@ import type {
   A2AStreamEvent,
   A2AStreamEventType,
   RespondToTaskInput,
+  // MPP types
+  MppPayInput,
+  MppOpenSessionInput,
+  MppSessionsListParams,
+  MppTransfersListParams,
+  MppProvisionWalletInput,
 } from './types';
 
 export interface SlyClientConfig {
@@ -1319,6 +1325,111 @@ export class SlyClient {
      */
     getStatus: (transferId: string) =>
       this.get<{ data: any }>(`/settlement/status/${transferId}`).then(r => r.data),
+  };
+
+  // ============================================
+  // MPP API (Machine Payments Protocol)
+  // ============================================
+
+  mpp = {
+    /**
+     * Make a one-shot MPP payment
+     */
+    pay: (input: MppPayInput) =>
+      this.post<any>('/mpp/pay', {
+        service_url: input.serviceUrl,
+        amount: input.amount,
+        currency: input.currency,
+        intent: input.intent,
+        agent_id: input.agentId,
+        wallet_id: input.walletId,
+      }),
+
+    /**
+     * List MPP sessions
+     */
+    listSessions: (params?: MppSessionsListParams) => {
+      const query = new URLSearchParams();
+      if (params?.agentId) query.set('agent_id', params.agentId);
+      if (params?.status) query.set('status', params.status);
+      if (params?.limit) query.set('limit', String(params.limit));
+      if (params?.offset) query.set('offset', String(params.offset));
+      const qs = query.toString();
+      return this.get<any>(`/mpp/sessions${qs ? `?${qs}` : ''}`);
+    },
+
+    /**
+     * Get session details with voucher history
+     */
+    getSession: (id: string) =>
+      this.get<any>(`/mpp/sessions/${id}`),
+
+    /**
+     * Open a new MPP session
+     */
+    openSession: (input: MppOpenSessionInput) =>
+      this.post<any>('/mpp/sessions', {
+        service_url: input.serviceUrl,
+        deposit_amount: input.depositAmount,
+        max_budget: input.maxBudget,
+        agent_id: input.agentId,
+        wallet_id: input.walletId,
+        currency: input.currency,
+      }),
+
+    /**
+     * Close an active session
+     */
+    closeSession: (id: string) =>
+      this.post<any>(`/mpp/sessions/${id}/close`, {}),
+
+    /**
+     * List MPP transfers
+     */
+    listTransfers: (params?: MppTransfersListParams) => {
+      const query = new URLSearchParams();
+      if (params?.serviceUrl) query.set('service_url', params.serviceUrl);
+      if (params?.sessionId) query.set('session_id', params.sessionId);
+      if (params?.limit) query.set('limit', String(params.limit));
+      if (params?.offset) query.set('offset', String(params.offset));
+      const qs = query.toString();
+      return this.get<any>(`/mpp/transfers${qs ? `?${qs}` : ''}`);
+    },
+
+    /**
+     * Verify an MPP payment receipt
+     */
+    verifyReceipt: (receiptId: string) =>
+      this.post<any>('/mpp/receipts/verify', { receipt_id: receiptId }),
+
+    /**
+     * Provision a wallet for MPP
+     */
+    provisionWallet: (input: MppProvisionWalletInput) =>
+      this.post<any>('/mpp/wallets/provision', {
+        agent_id: input.agentId,
+        owner_account_id: input.ownerAccountId,
+        testnet: input.testnet,
+        initial_balance: input.initialBalance,
+      }),
+
+    /**
+     * Browse MPP service directory
+     */
+    browseServices: (params?: { category?: string; limit?: number }) =>
+      this.get<any>('/mpp/services', params),
+
+    /**
+     * Get service pricing
+     */
+    getServicePricing: (domain: string) =>
+      this.get<any>(`/mpp/services/${domain}/pricing`),
+
+    /**
+     * Get MPP analytics summary
+     */
+    getAnalytics: (params?: { period?: string }) =>
+      this.get<any>('/mpp/analytics', params),
   };
 
   // ============================================

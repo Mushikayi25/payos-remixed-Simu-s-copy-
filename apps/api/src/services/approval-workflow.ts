@@ -19,7 +19,7 @@ import { OpType } from './ops/operation-types.js';
 // ============================================
 
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'expired' | 'executed';
-export type PaymentProtocol = 'x402' | 'ap2' | 'acp' | 'ucp';
+export type PaymentProtocol = 'x402' | 'ap2' | 'acp' | 'ucp' | 'mpp';
 
 export interface ApprovalRecipient {
   // x402
@@ -36,6 +36,9 @@ export interface ApprovalRecipient {
   // UCP
   corridor?: string;
   settlement_id?: string;
+  // MPP
+  mppServiceUrl?: string;
+  mppSessionId?: string;
   // Common
   name?: string;
   address?: string;

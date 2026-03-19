@@ -3,8 +3,9 @@
 **Status:** Pending
 **Phase:** 5.3 (Agent Contracting)
 **Priority:** P0 — Trust Layer for Agent Contracts
-**Estimated Points:** 28
-**Stories:** 8 (0 complete)
+**Estimated Points:** 25
+**Stories:** 7 (5 complete, 2 blocked on external SDKs)
+**Note:** Story 63.5 (On-Chain Escrow History Aggregator) moved to Epic 62 as Story 62.11. Stories 63.3 (Mnemom) and 63.4 (Vouched) are stubs blocked on external SDKs.
 **Dependencies:** None (can start immediately)
 **Created:** March 1, 2026
 
@@ -16,11 +17,13 @@
 
 Read-only aggregation service that consumes reputation data from multiple external sources and presents a unified trust score to Sly's policy engine. Sly does not become a reputation provider — we become the enterprise layer that checks reputation before authorizing contracts.
 
-**Four Reputation Sources:**
+**Three Reputation Sources (this epic):**
 1. **ERC-8004** (Ethereum/Base, launched Jan 29, 2026) — on-chain Identity, Reputation, and Validation registries
 2. **Mnemom Trust Ratings** — individual agent scores (0–1000, AAA-CCC grades) and Team Trust Ratings
 3. **Vouched Agent Checkpoint / MCP-I** — KYA suite with public "Know That AI" registry
-4. **On-Chain Escrow History** — AgentEscrowProtocol completion rates and dispute frequency
+
+**Fourth source (moved to Epic 62):**
+4. **On-Chain Escrow History** — now Epic 62 Story 62.11 (Escrow History Reputation Source)
 
 **Unified Trust Score:**
 All sources aggregate into a normalized 0–1000 score across four dimensions with weighted scoring. Wallet policies in Epic 18 reference tiers directly: `"min_counterparty_reputation_score": 600` means only contract with agents scoring 600+.
@@ -49,15 +52,22 @@ Sly never writes reputation data (we're not a reputation provider). All queries 
 ┌──────────────────────────────────────────────────────────┐
 │                  External Reputation Sources               │
 │                                                            │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────┐ ┌─────────┐│
-│  │  ERC-8004   │ │   Mnemom    │ │ Vouched │ │ Escrow  ││
-│  │  On-Chain   │ │  Trust API  │ │ MCP-I   │ │ History ││
-│  │  (Base/ETH) │ │             │ │         │ │ (Base)  ││
-│  └──────┬──────┘ └──────┬──────┘ └────┬────┘ └────┬────┘│
-│         │               │              │           │      │
-└─────────┼───────────────┼──────────────┼───────────┼──────┘
-          │               │              │           │
-          ▼               ▼              ▼           ▼
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────┐              │
+│  │  ERC-8004   │ │   Mnemom    │ │ Vouched │              │
+│  │  On-Chain   │ │  Trust API  │ │ MCP-I   │              │
+│  │  (Base/ETH) │ │             │ │         │              │
+│  └──────┬──────┘ └──────┬──────┘ └────┬────┘              │
+│         │               │              │                   │
+└─────────┼───────────────┼──────────────┼───────────────────┘
+          │               │              │
+          ▼               ▼              ▼
+                                    ┌─────────┐
+                                    │ Escrow  │ ◄── Epic 62
+                                    │ History │    Story 62.11
+                                    │ (Base)  │
+                                    └────┬────┘
+                                         │
+                                         ▼
 ┌──────────────────────────────────────────────────────────┐
 │           Unified Trust Score Calculator (63.6)           │
 │                                                           │
@@ -216,29 +226,9 @@ Integrate with Vouched Agent Checkpoint and MCP-I (identity standards built on A
 
 ---
 
-### Story 63.5: On-Chain Escrow History Aggregator
+### ~~Story 63.5~~ — Moved to Epic 62 as Story 62.11
 
-**Points:** 3
-**Priority:** P0
-
-**Description:**
-Read escrow completion history from AgentEscrowProtocol contract on Base. Directly relevant for payment reliability — measures actual payment behavior.
-
-**Implementation:**
-- Read escrow completion events for a given agent address
-- Calculate: completion rate, average escrow value, dispute frequency, total volume
-- Feeds into policy engine as "payment reliability" score component
-
-**Files:**
-- New: `apps/api/src/services/reputation/sources/escrow-history.ts`
-
-**Acceptance Criteria:**
-- [ ] Reads EscrowCompleted and EscrowDisputed events from AgentEscrowProtocol contract
-- [ ] Calculates completion rate (completed / total)
-- [ ] Calculates dispute frequency (disputed / total)
-- [ ] Tracks average escrow value and total volume
-- [ ] Results cached with 5-minute TTL
-- [ ] Handles agents with no escrow history (returns `data_points: 0`)
+> **On-Chain Escrow History Aggregator** has been moved to **Epic 62: Escrow Orchestration** as **Story 62.11: Escrow History Reputation Source**. Escrow history belongs with escrow infrastructure. See [Epic 62](./epic-62-escrow-orchestration.md) for the updated spec.
 
 ---
 
@@ -341,10 +331,12 @@ Add `a2a_task_feedback` as a reputation signal source alongside ERC-8004, Mnemom
 
 | Phase | Stories | Points |
 |-------|---------|--------|
-| Phase 1: Core Infrastructure | 63.1–63.5 | 17 |
+| Phase 1: Core Infrastructure | 63.1–63.4 | 14 |
 | Phase 2: Aggregation & UI | 63.6–63.7 | 8 |
 | Phase 3: Cross-Epic Integration | 63.8 | 3 |
-| **Total** | **8** | **28** |
+| **Total** | **7** | **25** |
+
+> **Note:** Story 63.5 (3 pts) moved to Epic 62 as Story 62.11.
 
 ---
 
@@ -354,18 +346,18 @@ Add `a2a_task_feedback` as a reputation signal source alongside ERC-8004, Mnemom
 Phase 1: Core Infrastructure
     63.1 (data model + cache) → can run in parallel:
         ├── 63.2 (ERC-8004)
-        ├── 63.3 (Mnemom)
-        ├── 63.4 (Vouched)
-        └── 63.5 (Escrow History)
+        ├── 63.3 (Mnemom) ← blocked on Mnemom SDK
+        └── 63.4 (Vouched) ← blocked on Vouched SDK
     ↓
 Phase 2: Aggregation & UI
-    63.6 (calculator, depends on at least 63.2 + 63.5) → 63.7 (dashboard widget)
+    63.6 (calculator, depends on 63.2 + Epic 62 Story 62.11) → 63.7 (dashboard widget)
     ↓
 Phase 3: Cross-Epic Integration
     63.8 (A2A feedback ingestion, depends on 63.6 + Epic 69.4)
 ```
 
-All four source integrations (63.2–63.5) can be developed in parallel after the data model lands.
+Source integrations 63.2–63.4 can be developed in parallel after the data model lands. 63.3 and 63.4 are blocked on external SDKs.
+Escrow history (formerly 63.5) is now Epic 62 Story 62.11 — the calculator (63.6) consumes its output cross-epic.
 Story 63.8 requires Epic 69 Story 69.4 to be complete (creates the `a2a_task_feedback` table).
 
 ---

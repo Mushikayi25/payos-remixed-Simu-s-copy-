@@ -1837,6 +1837,173 @@ export const tools: Tool[] = [
       required: [],
     },
   },
+
+  // ==========================================================================
+  // MPP (Machine Payments Protocol) Tools
+  // ==========================================================================
+  {
+    name: 'mpp_pay',
+    description: 'Make a one-shot MPP payment to a service. The payment goes through governance checks (spending limits, approval thresholds) before execution.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        service_url: {
+          type: 'string',
+          description: 'URL of the service to pay (e.g., "https://api.example.com")',
+        },
+        amount: {
+          type: 'number',
+          description: 'Payment amount',
+        },
+        currency: {
+          type: 'string',
+          description: 'Currency (default: USDC)',
+        },
+        intent: {
+          type: 'string',
+          description: 'Description of what the payment is for (optional)',
+        },
+        agent_id: {
+          type: 'string',
+          description: 'UUID of the agent making the payment',
+        },
+        wallet_id: {
+          type: 'string',
+          description: 'UUID of the wallet to pay from (optional)',
+        },
+      },
+      required: ['service_url', 'amount', 'agent_id'],
+    },
+  },
+  {
+    name: 'mpp_open_session',
+    description: 'Open a streaming MPP payment session with a deposit. Sessions allow multiple voucher payments to a service within a budget.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        service_url: {
+          type: 'string',
+          description: 'URL of the service',
+        },
+        deposit_amount: {
+          type: 'number',
+          description: 'Initial deposit amount for the session',
+        },
+        max_budget: {
+          type: 'number',
+          description: 'Maximum total budget for the session (optional)',
+        },
+        agent_id: {
+          type: 'string',
+          description: 'UUID of the agent',
+        },
+        wallet_id: {
+          type: 'string',
+          description: 'UUID of the wallet',
+        },
+        currency: {
+          type: 'string',
+          description: 'Currency (default: USDC)',
+        },
+      },
+      required: ['service_url', 'deposit_amount', 'agent_id', 'wallet_id'],
+    },
+  },
+  {
+    name: 'mpp_get_session',
+    description: 'Get MPP session details including voucher history, spending, and remaining budget.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_id: {
+          type: 'string',
+          description: 'UUID of the session',
+        },
+      },
+      required: ['session_id'],
+    },
+  },
+  {
+    name: 'mpp_list_sessions',
+    description: 'List MPP sessions with optional filtering by agent or status.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agent_id: {
+          type: 'string',
+          description: 'Filter by agent ID (optional)',
+        },
+        status: {
+          type: 'string',
+          enum: ['active', 'closed', 'expired', 'exhausted'],
+          description: 'Filter by session status (optional)',
+        },
+        limit: {
+          type: 'number',
+          description: 'Results per page (default: 50)',
+        },
+        offset: {
+          type: 'number',
+          description: 'Offset for pagination (default: 0)',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'mpp_close_session',
+    description: 'Close an active MPP session. Remaining funds are returned to the wallet.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_id: {
+          type: 'string',
+          description: 'UUID of the session to close',
+        },
+      },
+      required: ['session_id'],
+    },
+  },
+  {
+    name: 'mpp_list_transfers',
+    description: 'List MPP payment transfers with optional filtering by service URL or session.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        service_url: {
+          type: 'string',
+          description: 'Filter by service URL (optional)',
+        },
+        session_id: {
+          type: 'string',
+          description: 'Filter by session ID (optional)',
+        },
+        limit: {
+          type: 'number',
+          description: 'Results per page (default: 50)',
+        },
+        offset: {
+          type: 'number',
+          description: 'Offset for pagination (default: 0)',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'mpp_verify_receipt',
+    description: 'Verify an MPP payment receipt. Checks that the receipt is valid and matches a completed transfer.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        receipt_id: {
+          type: 'string',
+          description: 'The receipt ID to verify',
+        },
+      },
+      required: ['receipt_id'],
+    },
+  },
 ];
 
 /**
@@ -3198,6 +3365,113 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               text: JSON.stringify(result, null, 2),
             },
           ],
+        };
+      }
+
+      // ======================================================================
+      // MPP Tools
+      // ======================================================================
+
+      case 'mpp_pay': {
+        const { service_url, amount, currency, intent, agent_id, wallet_id } = args as {
+          service_url: string;
+          amount: number;
+          currency?: string;
+          intent?: string;
+          agent_id: string;
+          wallet_id?: string;
+        };
+        const result = await sly.request('/v1/mpp/pay', {
+          method: 'POST',
+          body: JSON.stringify({ service_url, amount, currency, intent, agent_id, wallet_id }),
+        });
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case 'mpp_open_session': {
+        const { service_url, deposit_amount, max_budget, agent_id, wallet_id, currency } = args as {
+          service_url: string;
+          deposit_amount: number;
+          max_budget?: number;
+          agent_id: string;
+          wallet_id: string;
+          currency?: string;
+        };
+        const result = await sly.request('/v1/mpp/sessions', {
+          method: 'POST',
+          body: JSON.stringify({ service_url, deposit_amount, max_budget, agent_id, wallet_id, currency }),
+        });
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case 'mpp_get_session': {
+        const { session_id } = args as { session_id: string };
+        const result = await sly.request(`/v1/mpp/sessions/${session_id}`);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case 'mpp_list_sessions': {
+        const { agent_id, status, limit, offset } = args as {
+          agent_id?: string;
+          status?: string;
+          limit?: number;
+          offset?: number;
+        };
+        const params = new URLSearchParams();
+        if (agent_id) params.set('agent_id', agent_id);
+        if (status) params.set('status', status);
+        if (limit) params.set('limit', String(limit));
+        if (offset) params.set('offset', String(offset));
+        const query = params.toString();
+        const result = await sly.request(`/v1/mpp/sessions${query ? `?${query}` : ''}`);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case 'mpp_close_session': {
+        const { session_id } = args as { session_id: string };
+        const result = await sly.request(`/v1/mpp/sessions/${session_id}/close`, {
+          method: 'POST',
+        });
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case 'mpp_list_transfers': {
+        const { service_url, session_id, limit, offset } = args as {
+          service_url?: string;
+          session_id?: string;
+          limit?: number;
+          offset?: number;
+        };
+        const params = new URLSearchParams();
+        if (service_url) params.set('service_url', service_url);
+        if (session_id) params.set('session_id', session_id);
+        if (limit) params.set('limit', String(limit));
+        if (offset) params.set('offset', String(offset));
+        const query = params.toString();
+        const result = await sly.request(`/v1/mpp/transfers${query ? `?${query}` : ''}`);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case 'mpp_verify_receipt': {
+        const { receipt_id } = args as { receipt_id: string };
+        const result = await sly.request('/v1/mpp/receipts/verify', {
+          method: 'POST',
+          body: JSON.stringify({ receipt_id }),
+        });
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
         };
       }
 

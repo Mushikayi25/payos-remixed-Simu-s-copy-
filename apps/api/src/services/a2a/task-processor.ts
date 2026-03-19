@@ -17,7 +17,8 @@ import { A2APaymentHandler } from './payment-handler.js';
 import { AgentToolRegistry } from './tools/registry.js';
 import { toolHandlers } from './tools/handlers.js';
 import type { AgentContext } from './tools/context-injector.js';
-import type { A2ATask } from './types.js';
+import type { A2ATask, AcceptancePolicy } from './types.js';
+import { DEFAULT_ACCEPTANCE_POLICY } from './types.js';
 import { authorizeWalletTransfer, isOnChainCapable } from '../wallet-settlement.js';
 import { A2AClient } from './client.js';
 import { A2AWebhookHandler } from './webhook-handler.js';
@@ -603,7 +604,128 @@ export class A2ATaskProcessor {
       .single();
 
     if (error || !mandate) return null;
+
+    // Emit audit event for mandate creation
+    const { taskEventBus } = await import('./task-event-bus.js');
+    taskEventBus.emitTask(taskId, {
+      type: 'payment',
+      taskId,
+      data: {
+        action: 'mandate_created',
+        mandateId: mandate.mandate_id,
+        amount,
+        currency,
+        callerAgentId,
+        providerAgentId,
+      },
+      timestamp: new Date().toISOString(),
+    }, { tenantId: this.tenantId, agentId: providerAgentId, actorType: 'system' });
+
     return { mandateId: mandate.mandate_id };
+  }
+
+  // --- Epic 69: Acceptance Gate ---
+
+  /**
+   * Read acceptance_policy from a skill's metadata.
+   * Returns DEFAULT_ACCEPTANCE_POLICY if missing or invalid.
+   */
+  private async getAcceptancePolicy(agentId: string, skillId?: string): Promise<AcceptancePolicy> {
+    if (!skillId) return DEFAULT_ACCEPTANCE_POLICY;
+
+    const { data: skill } = await this.supabase
+      .from('agent_skills')
+      .select('metadata')
+      .eq('agent_id', agentId)
+      .eq('skill_id', skillId)
+      .eq('tenant_id', this.tenantId)
+      .maybeSingle();
+
+    if (!skill?.metadata?.acceptance_policy) return DEFAULT_ACCEPTANCE_POLICY;
+
+    const raw = skill.metadata.acceptance_policy as Record<string, unknown>;
+    return {
+      requires_acceptance: typeof raw.requires_acceptance === 'boolean' ? raw.requires_acceptance : DEFAULT_ACCEPTANCE_POLICY.requires_acceptance,
+      auto_accept_below: typeof raw.auto_accept_below === 'number' && raw.auto_accept_below >= 0 ? raw.auto_accept_below : DEFAULT_ACCEPTANCE_POLICY.auto_accept_below,
+      review_timeout_minutes: typeof raw.review_timeout_minutes === 'number' && raw.review_timeout_minutes > 0 ? raw.review_timeout_minutes : DEFAULT_ACCEPTANCE_POLICY.review_timeout_minutes,
+    };
+  }
+
+  /**
+   * Check if a completed task should pause for caller acceptance.
+   * Returns true if the gate is engaged (task set to input-required).
+   * Returns false if the task should proceed to immediate settlement.
+   */
+  async checkAcceptanceGate(
+    taskId: string,
+    mandateId: string,
+    outcome: 'completed' | 'failed',
+  ): Promise<boolean> {
+    if (outcome !== 'completed') return false;
+
+    // Read task metadata for skill and agent info
+    const { data: task } = await this.supabase
+      .from('a2a_tasks')
+      .select('agent_id, metadata, client_agent_id')
+      .eq('id', taskId)
+      .eq('tenant_id', this.tenantId)
+      .single();
+
+    if (!task) return false;
+
+    const skillId = task.metadata?.skillId as string | undefined;
+    const policy = await this.getAcceptancePolicy(task.agent_id, skillId);
+
+    if (!policy.requires_acceptance) return false;
+
+    // Check auto-accept threshold
+    const { data: mandate } = await this.supabase
+      .from('ap2_mandates')
+      .select('authorized_amount')
+      .eq('mandate_id', mandateId)
+      .eq('tenant_id', this.tenantId)
+      .single();
+
+    if (!mandate) return false;
+
+    const amount = Number(mandate.authorized_amount);
+    if (policy.auto_accept_below > 0 && amount < policy.auto_accept_below) return false;
+
+    // Engage the gate: set input-required with review context
+    this.log(taskId, 'info', `Acceptance gate engaged — awaiting caller review (timeout: ${policy.review_timeout_minutes}m)`);
+
+    await this.taskService.setInputRequired(taskId, 'Task completed — awaiting caller acceptance', {
+      reason_code: 'result_review',
+      next_action: 'accept_or_reject',
+      resolve_endpoint: `POST /v1/a2a/tasks/${taskId}/respond`,
+      required_auth: 'api_key',
+      details: {
+        mandate_id: mandateId,
+        amount,
+        review_timeout_minutes: policy.review_timeout_minutes,
+      },
+    });
+
+    // Store review metadata on the task
+    await this.supabase
+      .from('a2a_tasks')
+      .update({
+        metadata: {
+          ...task.metadata,
+          review_status: 'pending',
+          review_requested_at: new Date().toISOString(),
+          review_timeout_minutes: policy.review_timeout_minutes,
+          input_required_context: {
+            reason_code: 'result_review',
+            next_action: 'accept_or_reject',
+            details: { mandate_id: mandateId, amount },
+          },
+        },
+      })
+      .eq('id', taskId)
+      .eq('tenant_id', this.tenantId);
+
+    return true;
   }
 
   /**
@@ -611,11 +733,13 @@ export class A2ATaskProcessor {
    * On 'completed': deducts from caller wallet, credits provider wallet,
    * creates a transfer record, and marks mandate completed.
    * On 'failed': cancels the mandate — no money moves.
+   * @param overrideAmount — Optional partial settlement amount (must be <= authorized_amount)
    */
   async resolveSettlementMandate(
     taskId: string,
     mandateId: string,
     outcome: 'completed' | 'failed',
+    overrideAmount?: number,
   ): Promise<void> {
     const { data: mandate } = await this.supabase
       .from('ap2_mandates')
@@ -627,7 +751,7 @@ export class A2ATaskProcessor {
     if (!mandate || mandate.status !== 'active') return;
 
     if (outcome === 'completed') {
-      const amount = Number(mandate.authorized_amount);
+      const amount = overrideAmount ?? Number(mandate.authorized_amount);
       const providerAgentId = mandate.metadata?.providerAgentId;
       const providerAccountId = mandate.metadata?.providerAccountId;
 
@@ -761,6 +885,21 @@ export class A2ATaskProcessor {
         .update({ status: 'completed', updated_at: new Date().toISOString() })
         .eq('id', mandate.id);
 
+      // Emit audit event for successful settlement
+      const { taskEventBus: bus1 } = await import('./task-event-bus.js');
+      bus1.emitTask(taskId, {
+        type: 'payment',
+        taskId,
+        data: {
+          action: 'mandate_settled',
+          mandateId,
+          amount,
+          currency: mandate.currency,
+          outcome: 'completed',
+        },
+        timestamp: new Date().toISOString(),
+      }, { tenantId: this.tenantId, agentId: mandate.metadata?.providerAgentId || '', actorType: 'system' });
+
     } else {
       // Cancel mandate — no money moves
       await this.supabase
@@ -771,6 +910,19 @@ export class A2ATaskProcessor {
           updated_at: new Date().toISOString(),
         })
         .eq('id', mandate.id);
+
+      // Emit audit event for mandate cancellation
+      const { taskEventBus: bus2 } = await import('./task-event-bus.js');
+      bus2.emitTask(taskId, {
+        type: 'payment',
+        taskId,
+        data: {
+          action: 'mandate_cancelled',
+          mandateId,
+          outcome: 'failed',
+        },
+        timestamp: new Date().toISOString(),
+      }, { tenantId: this.tenantId, agentId: mandate.metadata?.providerAgentId || '', actorType: 'system' });
     }
   }
 
@@ -1021,6 +1173,14 @@ export class A2ATaskProcessor {
           // Execute settlement mandate — deduct caller, credit provider
           const settlementMandateId = await getSettlementMandateId();
           if (settlementMandateId) {
+            // Check acceptance gate before settling
+            const gateEngaged = await this.checkAcceptanceGate(taskId, settlementMandateId, 'completed');
+            if (gateEngaged) {
+              // Gate engaged — task set to input-required, skip settlement and completion
+              agentCircuitBreaker.recordSuccess(agent.id);
+              return this.taskService.getTask(taskId);
+            }
+
             await this.resolveSettlementMandate(taskId, settlementMandateId, 'completed');
             await this.taskService.addArtifact(taskId, {
               name: 'settlement-receipt',
@@ -2418,6 +2578,22 @@ export class A2ATaskProcessor {
     });
 
     await this.taskService.updateTaskState(taskId, 'completed', 'Mandate created');
+
+    // Emit audit event for timeline visibility
+    const { taskEventBus } = await import('./task-event-bus.js');
+    taskEventBus.emitTask(taskId, {
+      type: 'payment',
+      taskId,
+      data: {
+        action: 'mandate_created',
+        mandateId: mandate.mandate_id,
+        amount: intent.amount,
+        currency: intent.currency,
+        mandateType,
+      },
+      timestamp: new Date().toISOString(),
+    }, { tenantId: this.tenantId, agentId: agentCtx.agentId, actorType: 'agent' });
+
     return this.taskService.getTask(taskId);
   }
 

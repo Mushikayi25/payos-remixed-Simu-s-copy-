@@ -3,14 +3,15 @@
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Tabs, TabsList, TabsTrigger, TabsContent, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@sly/ui';
-import { Zap, Bot, ShoppingCart, BarChart3, Globe } from 'lucide-react';
+import { Zap, Bot, ShoppingCart, BarChart3, Globe, DollarSign } from 'lucide-react';
 import { X402Analytics } from '@/components/agentic-payments/x402-analytics';
 import { Ap2Analytics } from '@/components/ap2/ap2-analytics';
 import { AcpAnalytics } from '@/components/acp/acp-analytics';
 import { UcpAnalytics } from '@/components/ucp/ucp-analytics';
+import { MppAnalytics } from '@/components/agentic-payments/mpp-analytics';
 import { AllProtocolsOverview } from '@/components/agentic-payments/all-protocols-overview';
 
-type Protocol = 'all' | 'x402' | 'ap2' | 'acp' | 'ucp';
+type Protocol = 'all' | 'x402' | 'ap2' | 'acp' | 'ucp' | 'mpp';
 type Period = '24h' | '7d' | '30d' | '90d';
 
 export default function AgenticAnalyticsPage() {
@@ -59,6 +60,9 @@ export default function AgenticAnalyticsPage() {
                     <TabsTrigger value="x402">
                         <Zap className="w-4 h-4 mr-1" /> x402
                     </TabsTrigger>
+                    <TabsTrigger value="mpp">
+                        <DollarSign className="w-4 h-4 mr-1" /> MPP
+                    </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="all" className="pt-6">
@@ -75,6 +79,9 @@ export default function AgenticAnalyticsPage() {
                 </TabsContent>
                 <TabsContent value="x402" className="pt-4">
                     <X402Analytics period={period} />
+                </TabsContent>
+                <TabsContent value="mpp" className="pt-4">
+                    <MppAnalytics period={period} />
                 </TabsContent>
             </Tabs>
         </div>

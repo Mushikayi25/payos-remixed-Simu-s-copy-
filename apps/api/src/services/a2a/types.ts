@@ -331,15 +331,35 @@ export interface InputRequiredContext {
     | 'needs_agent_auth'
     | 'insufficient_funds'
     | 'missing_wallet'
-    | 'kya_required';
+    | 'kya_required'
+    | 'no_handler'
+    | 'result_review';
   next_action:
     | 'send_payment_proof'
     | 'human_respond'
     | 'authenticate_as_agent'
     | 'fund_wallet'
     | 'verify_agent'
-    | 'create_wallet';
+    | 'create_wallet'
+    | 'register_webhook'
+    | 'accept_or_reject';
   resolve_endpoint?: string;
   required_auth?: 'api_key' | 'agent_token' | 'none';
   details?: Record<string, unknown>;
 }
+
+// =============================================================================
+// Acceptance Policy (Epic 69 — Result Acceptance & Quality Feedback)
+// =============================================================================
+
+export interface AcceptancePolicy {
+  requires_acceptance: boolean;
+  auto_accept_below: number;
+  review_timeout_minutes: number;
+}
+
+export const DEFAULT_ACCEPTANCE_POLICY: AcceptancePolicy = {
+  requires_acceptance: false,
+  auto_accept_below: 0,
+  review_timeout_minutes: 60,
+};

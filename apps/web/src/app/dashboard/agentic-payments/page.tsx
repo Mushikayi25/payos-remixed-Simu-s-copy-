@@ -47,6 +47,25 @@ export default function AgenticPaymentsOverviewPage() {
         enabled: !!api,
     });
 
+    const { data: mppData } = useQuery({
+        queryKey: ['mpp', 'overview-stats'],
+        queryFn: async () => {
+            try {
+                const [transfers, sessions] = await Promise.all([
+                    api!.mpp.listTransfers({ limit: 1 }),
+                    api!.mpp.listSessions({ limit: 1 }),
+                ]);
+                return {
+                    payments: transfers?.pagination?.total ?? transfers?.total ?? 0,
+                    sessions: sessions?.pagination?.total ?? 0,
+                };
+            } catch {
+                return { payments: 0, sessions: 0 };
+            }
+        },
+        enabled: !!api,
+    });
+
     const protocols = [
         {
             id: 'ucp',
@@ -101,6 +120,19 @@ export default function AgenticPaymentsOverviewPage() {
             stats: {
                 endpoints: x402Data?.endpointCount ?? 0,
                 revenue: formatCurrency(x402Data?.totalRevenue ?? 0, 'USD'),
+            }
+        },
+        {
+            id: 'mpp',
+            name: 'MPP Protocol',
+            description: 'Machine Payments Protocol - Governed HTTP 402 machine-to-machine payments',
+            icon: DollarSign,
+            color: 'text-orange-600 dark:text-orange-400',
+            bgColor: 'bg-orange-100 dark:bg-orange-950',
+            href: '/dashboard/agentic-payments/mpp',
+            stats: {
+                payments: mppData?.payments ?? 0,
+                sessions: mppData?.sessions ?? 0,
             }
         },
     ];

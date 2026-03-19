@@ -102,6 +102,32 @@ export const PROTOCOLS: Record<ProtocolId, Protocol> = {
       api: `${DOCS_BASE_URL}/ucp/api-reference`,
     },
   },
+
+  mpp: {
+    id: 'mpp',
+    name: 'Machine Payments Protocol',
+    description: 'HTTP 402 machine-to-machine payments (Stripe/Tempo Labs). Supports one-shot charges, streaming sessions, and multi-method settlement (Tempo stablecoins, Stripe cards, Lightning).',
+    version: '2026-03-18',
+    status: 'beta',
+    prerequisites: {
+      wallet: true,
+      kyaLevel: 1,
+    },
+    capabilities: [
+      'one-shot-payments',
+      'streaming-sessions',
+      'http-402',
+      'multi-method-settlement',
+      'tempo-stablecoins',
+      'receipt-verification',
+      'service-discovery',
+    ],
+    docs: {
+      overview: `${DOCS_BASE_URL}/mpp`,
+      quickstart: `${DOCS_BASE_URL}/mpp/quickstart`,
+      api: `${DOCS_BASE_URL}/mpp/api-reference`,
+    },
+  },
 };
 
 /**

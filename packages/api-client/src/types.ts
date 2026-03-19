@@ -280,7 +280,7 @@ export interface StreamStats {
 // Transfer Types
 // ============================================
 
-export type TransferType = 'cross_border' | 'internal' | 'stream_start' | 'stream_withdraw' | 'deposit' | 'withdrawal' | 'x402' | 'payout' | 'refund' | 'wallet_transfer';
+export type TransferType = 'cross_border' | 'internal' | 'stream_start' | 'stream_withdraw' | 'deposit' | 'withdrawal' | 'x402' | 'payout' | 'refund' | 'wallet_transfer' | 'mpp';
 export type TransferStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
 
 export interface Transfer {
@@ -1530,4 +1530,47 @@ export interface A2AStreamEvent {
   taskId: string;
   data: Record<string, unknown>;
   timestamp: string;
+}
+
+// ============================================
+// MPP Types (Machine Payments Protocol)
+// ============================================
+
+export interface MppPayInput {
+  serviceUrl: string;
+  amount: number;
+  currency?: string;
+  intent?: string;
+  agentId: string;
+  walletId?: string;
+}
+
+export interface MppOpenSessionInput {
+  serviceUrl: string;
+  depositAmount: number;
+  maxBudget?: number;
+  agentId: string;
+  walletId: string;
+  currency?: string;
+}
+
+export interface MppSessionsListParams {
+  agentId?: string;
+  status?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface MppTransfersListParams {
+  serviceUrl?: string;
+  sessionId?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface MppProvisionWalletInput {
+  agentId: string;
+  ownerAccountId: string;
+  testnet?: boolean;
+  initialBalance?: number;
 }

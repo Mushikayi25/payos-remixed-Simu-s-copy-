@@ -79,6 +79,8 @@ export default function TransferDetailPage() {
         return 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-400';
       case 'payout':
         return 'bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-400';
+      case 'mpp':
+        return 'bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-400';
       default:
         return 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-400';
     }
@@ -499,6 +501,92 @@ export default function TransferDetailPage() {
                     </div>
                   )}
                 </dl>
+              </div>
+            </div>
+          )}
+
+          {/* MPP Metadata Section */}
+          {safeTransfer.type === 'mpp' && safeTransfer.protocolMetadata && (
+            <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <DollarSign className="h-5 w-5" />
+                MPP Payment Details
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Service Info */}
+                <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4">
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                    <Globe className="h-4 w-4" />
+                    Service Information
+                  </h4>
+                  <dl className="space-y-3">
+                    {safeTransfer.protocolMetadata.service_url && (
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500 dark:text-gray-400">Service URL</dt>
+                        <dd className="font-mono text-sm text-gray-900 dark:text-white truncate max-w-[200px]">
+                          {safeTransfer.protocolMetadata.service_url}
+                        </dd>
+                      </div>
+                    )}
+                    {safeTransfer.protocolMetadata.payment_method && (
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500 dark:text-gray-400">Payment Method</dt>
+                        <dd className="font-mono text-sm text-gray-900 dark:text-white capitalize">
+                          {safeTransfer.protocolMetadata.payment_method}
+                        </dd>
+                      </div>
+                    )}
+                    {safeTransfer.protocolMetadata.intent && (
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500 dark:text-gray-400">Intent</dt>
+                        <dd className="text-sm text-gray-900 dark:text-white">
+                          {safeTransfer.protocolMetadata.intent}
+                        </dd>
+                      </div>
+                    )}
+                  </dl>
+                </div>
+                {/* Settlement Info */}
+                <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4">
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                    <Wallet className="h-4 w-4" />
+                    Settlement
+                  </h4>
+                  <dl className="space-y-3">
+                    {safeTransfer.protocolMetadata.receipt_id && (
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500 dark:text-gray-400">Receipt ID</dt>
+                        <dd className="font-mono text-xs text-gray-900 dark:text-white">
+                          {safeTransfer.protocolMetadata.receipt_id}
+                        </dd>
+                      </div>
+                    )}
+                    {safeTransfer.protocolMetadata.settlement_network && (
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500 dark:text-gray-400">Network</dt>
+                        <dd className="font-mono text-sm text-gray-900 dark:text-white">
+                          {safeTransfer.protocolMetadata.settlement_network}
+                        </dd>
+                      </div>
+                    )}
+                    {safeTransfer.protocolMetadata.settlement_tx_hash && (
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500 dark:text-gray-400">Tx Hash</dt>
+                        <dd className="font-mono text-xs text-gray-900 dark:text-white truncate max-w-[200px]">
+                          {safeTransfer.protocolMetadata.settlement_tx_hash}
+                        </dd>
+                      </div>
+                    )}
+                    {safeTransfer.protocolMetadata.verified_at && (
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500 dark:text-gray-400">Verified</dt>
+                        <dd className="text-sm text-gray-900 dark:text-white">
+                          {new Date(safeTransfer.protocolMetadata.verified_at).toLocaleString()}
+                        </dd>
+                      </div>
+                    )}
+                  </dl>
+                </div>
               </div>
             </div>
           )}

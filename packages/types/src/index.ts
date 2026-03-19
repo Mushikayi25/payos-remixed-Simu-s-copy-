@@ -54,13 +54,14 @@ export type TransferType =
   | 'x402'   // Coinbase/Cloudflare HTTP 402
   | 'ap2'    // Google Agent Payment Protocol
   | 'acp'    // Stripe/OpenAI Agentic Commerce Protocol
+  | 'mpp'    // Machine Payments Protocol (Stripe/Tempo Labs)
   // Legacy types
   | 'payout'
   | 'refund'
   | 'wallet_transfer';
 
 /** Protocol-specific transfer types */
-export type ProtocolTransferType = 'x402' | 'ap2' | 'acp';
+export type ProtocolTransferType = 'x402' | 'ap2' | 'acp' | 'mpp';
 
 export type TransferStatus = 'pending' | 'processing' | 'authorized' | 'completed' | 'failed' | 'cancelled';
 

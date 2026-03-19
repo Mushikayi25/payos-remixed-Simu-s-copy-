@@ -889,16 +889,32 @@ function WalletSpendingPolicies({ agent }: { agent: Agent }) {
       <div className="space-y-4">
         {wallets.map((wallet: any) => {
           const policy = wallet.spending_policy || wallet.spendingPolicy;
+          const addr = wallet.wallet_address || wallet.walletAddress || wallet.address;
+          const network = wallet.network;
+          const provider = wallet.provider;
+          const walletName = wallet.name || (provider === 'tempo' ? 'Tempo Wallet' : provider === 'circle' ? 'Circle Wallet' : 'Wallet');
           return (
             <div key={wallet.id} className="border border-gray-200 dark:border-gray-800 rounded-xl p-4">
               <div className="flex items-center justify-between mb-2">
-                <div>
-                  <span className="font-medium text-gray-900 dark:text-white">{wallet.name}</span>
+                <div className="flex items-center gap-2">
+                  <Link href={`/dashboard/wallets/${wallet.id}`} className="font-medium text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 underline-offset-2 hover:underline">
+                    {walletName}
+                  </Link>
+                  {network && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 font-medium">
+                      {network}
+                    </span>
+                  )}
                   {wallet.purpose && (
-                    <span className="ml-2 text-xs text-muted-foreground">{wallet.purpose}</span>
+                    <span className="text-xs text-muted-foreground">{wallet.purpose}</span>
                   )}
                 </div>
-                <span className="text-sm font-medium">{formatCurrency(wallet.balance, wallet.currency)}</span>
+                <div className="text-right">
+                  <span className="text-sm font-medium">{formatCurrency(wallet.balance, wallet.currency)}</span>
+                  {addr && addr.startsWith('0x') && (
+                    <div className="text-[10px] font-mono text-gray-400 mt-0.5">{addr.slice(0, 6)}...{addr.slice(-4)}</div>
+                  )}
+                </div>
               </div>
               {policy ? (
                 <div className="flex flex-wrap gap-2 mt-2">

@@ -109,6 +109,52 @@ export interface ACPMetadata {
 }
 
 // ============================================
+// MPP Protocol (Stripe/Tempo Labs)
+// ============================================
+
+/**
+ * Metadata for MPP (Machine Payments Protocol)
+ * Used for machine-to-machine HTTP 402 payments with sessions
+ */
+export interface MppMetadata {
+  /** Protocol identifier */
+  protocol: 'mpp';
+
+  /** Service URL that received the payment */
+  service_url: string;
+
+  /** Payment method used */
+  payment_method: 'tempo' | 'stripe' | 'lightning' | 'card' | 'custom';
+
+  /** Protocol-level intent from mppx challenge/receipt (e.g. 'charge', 'session') */
+  protocol_intent?: 'charge' | 'session';
+
+  /** Human-readable payment description */
+  intent?: string;
+
+  /** Session ID (for streaming payments) */
+  session_id?: string;
+
+  /** Voucher index within session */
+  voucher_index?: number;
+
+  /** Receipt ID from MPP */
+  receipt_id?: string;
+
+  /** Raw receipt data */
+  receipt_data?: Record<string, any>;
+
+  /** Settlement network (e.g., 'tempo-testnet', 'stripe') */
+  settlement_network?: string;
+
+  /** Settlement transaction hash */
+  settlement_tx_hash?: string;
+
+  /** Timestamp when payment was verified */
+  verified_at?: string;
+}
+
+// ============================================
 // Union Type
 // ============================================
 
@@ -116,7 +162,7 @@ export interface ACPMetadata {
  * Union type for all protocol metadata
  * Stored in transfers.protocol_metadata (JSONB column)
  */
-export type ProtocolMetadata = X402Metadata | AP2Metadata | ACPMetadata | null;
+export type ProtocolMetadata = X402Metadata | AP2Metadata | ACPMetadata | MppMetadata | null;
 
 // ============================================
 // Type Guards
@@ -141,6 +187,13 @@ export function isAP2Metadata(metadata: any): metadata is AP2Metadata {
  */
 export function isACPMetadata(metadata: any): metadata is ACPMetadata {
   return metadata?.protocol === 'acp';
+}
+
+/**
+ * Type guard for MPP metadata
+ */
+export function isMppMetadata(metadata: any): metadata is MppMetadata {
+  return metadata?.protocol === 'mpp';
 }
 
 /**

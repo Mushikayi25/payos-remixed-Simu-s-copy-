@@ -38,6 +38,7 @@ import { LangChainTools } from './langchain/tools';
 import { CardsClient } from './cards';
 import { A2AClient } from './protocols/a2a/client';
 import { AgentWalletsClient } from './protocols/agent-wallets/client';
+import { MPPClient } from './protocols/mpp/client';
 
 /**
  * Main Sly SDK class
@@ -114,6 +115,12 @@ export class Sly extends SlyClient {
    */
   public readonly agentWallets: AgentWalletsClient;
 
+  /**
+   * MPP (Machine Payments Protocol) client
+   * Governed machine-to-machine payments and streaming sessions
+   */
+  public readonly mpp: MPPClient;
+
   constructor(config: SlyConfig) {
     // Validate API key
     if (!config.apiKey || config.apiKey.trim() === '') {
@@ -159,6 +166,9 @@ export class Sly extends SlyClient {
 
     // Initialize Agent Wallets client (Epic 18)
     this.agentWallets = new AgentWalletsClient(this);
+
+    // Initialize MPP client (Epic 71)
+    this.mpp = new MPPClient(this);
   }
 }
 

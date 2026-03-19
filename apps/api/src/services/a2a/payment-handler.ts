@@ -247,6 +247,27 @@ export class A2APaymentHandler {
     // Link payment to task
     await this.taskService.linkPayment(taskId, transfer.id);
 
+    // Emit audit event for timeline visibility
+    const { taskEventBus } = await import('./task-event-bus.js');
+    const { data: taskRow } = await this.supabase
+      .from('a2a_tasks')
+      .select('agent_id')
+      .eq('id', taskId)
+      .eq('tenant_id', this.tenantId)
+      .single();
+    taskEventBus.emitTask(taskId, {
+      type: 'payment',
+      taskId,
+      data: {
+        action: 'transfer_created',
+        transferId: transfer.id,
+        amount,
+        currency,
+        settlement: onChainCapable ? 'on_chain' : 'ledger',
+      },
+      timestamp: new Date().toISOString(),
+    }, { tenantId: this.tenantId, agentId: taskRow?.agent_id || '', actorType: 'system' });
+
     // Epic 18: Record counterparty exposure after successful payment
     try {
       const exposureService = new CounterpartyExposureService(this.supabase);
@@ -306,6 +327,25 @@ export class A2APaymentHandler {
         text: `This task requires a payment of ${requirement.amount} ${requirement.currency}. Please submit payment to proceed.`,
       },
     ]);
+
+    // Emit audit event for timeline visibility
+    const { taskEventBus } = await import('./task-event-bus.js');
+    const { data: task } = await this.supabase
+      .from('a2a_tasks')
+      .select('agent_id')
+      .eq('id', taskId)
+      .eq('tenant_id', this.tenantId)
+      .single();
+    taskEventBus.emitTask(taskId, {
+      type: 'payment',
+      taskId,
+      data: {
+        action: 'payment_requested',
+        amount: requirement.amount,
+        currency: requirement.currency,
+      },
+      timestamp: new Date().toISOString(),
+    }, { tenantId: this.tenantId, agentId: task?.agent_id || '', actorType: 'system' });
   }
 
   /**
@@ -390,6 +430,27 @@ export class A2APaymentHandler {
       },
     ]);
 
+    // Emit audit event for timeline visibility
+    const { taskEventBus } = await import('./task-event-bus.js');
+    const { data: taskRow } = await this.supabase
+      .from('a2a_tasks')
+      .select('agent_id')
+      .eq('id', taskId)
+      .eq('tenant_id', this.tenantId)
+      .single();
+    taskEventBus.emitTask(taskId, {
+      type: 'payment',
+      taskId,
+      data: {
+        action: 'payment_verified',
+        paymentType: 'x402',
+        transferId: transfer.id,
+        amount: transfer.amount,
+        currency: transfer.currency,
+      },
+      timestamp: new Date().toISOString(),
+    }, { tenantId: this.tenantId, agentId: taskRow?.agent_id || '', actorType: 'system' });
+
     return { verified: true };
   }
 
@@ -424,6 +485,26 @@ export class A2APaymentHandler {
       .eq('tenant_id', this.tenantId);
 
     await this.taskService.updateTaskState(taskId, 'working', 'Mandate verified, processing task');
+
+    // Emit audit event for timeline visibility
+    const { taskEventBus } = await import('./task-event-bus.js');
+    const { data: taskRow } = await this.supabase
+      .from('a2a_tasks')
+      .select('agent_id')
+      .eq('id', taskId)
+      .eq('tenant_id', this.tenantId)
+      .single();
+    taskEventBus.emitTask(taskId, {
+      type: 'payment',
+      taskId,
+      data: {
+        action: 'payment_verified',
+        paymentType: 'ap2',
+        mandateId,
+      },
+      timestamp: new Date().toISOString(),
+    }, { tenantId: this.tenantId, agentId: taskRow?.agent_id || '', actorType: 'system' });
+
     return { verified: true };
   }
 
@@ -444,6 +525,28 @@ export class A2APaymentHandler {
 
     await this.taskService.linkPayment(taskId, transferId);
     await this.taskService.updateTaskState(taskId, 'working', 'Payment verified, processing task');
+
+    // Emit audit event for timeline visibility
+    const { taskEventBus } = await import('./task-event-bus.js');
+    const { data: taskRow } = await this.supabase
+      .from('a2a_tasks')
+      .select('agent_id')
+      .eq('id', taskId)
+      .eq('tenant_id', this.tenantId)
+      .single();
+    taskEventBus.emitTask(taskId, {
+      type: 'payment',
+      taskId,
+      data: {
+        action: 'payment_verified',
+        paymentType: 'wallet',
+        transferId,
+        amount: transfer.amount,
+        currency: transfer.currency,
+      },
+      timestamp: new Date().toISOString(),
+    }, { tenantId: this.tenantId, agentId: taskRow?.agent_id || '', actorType: 'system' });
+
     return { verified: true };
   }
 }

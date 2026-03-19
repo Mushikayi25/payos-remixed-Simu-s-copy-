@@ -8,6 +8,7 @@ import {
   Shield,
   ShoppingCart,
   Globe,
+  DollarSign,
   Check,
   X,
   AlertCircle,
@@ -52,6 +53,14 @@ const PROTOCOL_CONFIG = {
     bgColor: 'bg-green-100 dark:bg-green-950',
     borderColor: 'border-green-200 dark:border-green-800',
     description: 'Google+Shopify standard',
+  },
+  mpp: {
+    name: 'Machine Payments',
+    icon: DollarSign,
+    color: 'text-orange-600 dark:text-orange-400',
+    bgColor: 'bg-orange-100 dark:bg-orange-950',
+    borderColor: 'border-orange-200 dark:border-orange-800',
+    description: 'HTTP 402 machine-to-machine payments',
   },
 } as const;
 
@@ -195,7 +204,7 @@ export function ProtocolStatusWidget() {
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Protocol Status</h3>
         <span className="text-sm text-gray-500 dark:text-gray-400">
-          {enabledCount}/4 enabled
+          {enabledCount}/{Object.keys(PROTOCOL_CONFIG).length} enabled
         </span>
       </div>
 

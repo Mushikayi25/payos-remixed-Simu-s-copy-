@@ -57,6 +57,18 @@ export enum OpType {
   X402_PAYMENT_SENT = 'x402.payment_sent',
   X402_PAYMENT_VERIFIED = 'x402.payment_verified',
 
+  // --- MPP Protocol (Machine Payments Protocol) ---
+  MPP_CHALLENGE_RECEIVED = 'mpp.challenge_received',
+  MPP_POLICY_CHECKED = 'mpp.policy_checked',
+  MPP_POLICY_VIOLATED = 'mpp.policy_violated',
+  MPP_CREDENTIAL_SIGNED = 'mpp.credential_signed',
+  MPP_PAYMENT_COMPLETED = 'mpp.payment_completed',
+  MPP_PAYMENT_FAILED = 'mpp.payment_failed',
+  MPP_SESSION_OPENED = 'mpp.session_opened',
+  MPP_SESSION_VOUCHER = 'mpp.session_voucher',
+  MPP_SESSION_CLOSED = 'mpp.session_closed',
+  MPP_SESSION_EXHAUSTED = 'mpp.session_exhausted',
+
   // --- Governance & Compliance ---
   GOVERNANCE_KYA = 'governance.kya',
   GOVERNANCE_LIMIT_CHECK = 'governance.limit_check',
@@ -80,6 +92,10 @@ export enum OpType {
   A2A_TASK_STATE_CHANGED = 'a2a.task_state_changed',
   DISCOVERY_MERCHANT_SCAN = 'discovery.merchant_scan',
   DISCOVERY_SHOPPING_TEST = 'discovery.shopping_test',
+
+  // --- Composition (Multi-Protocol) ---
+  COMPOSITION_TASK_SETTLED = 'composition.task_settled',
+  COMPOSITION_TASK_REJECTED = 'composition.task_rejected',
 }
 
 // =============================================================================
@@ -93,11 +109,13 @@ export enum OpCategory {
   ACP = 'acp',
   AP2 = 'ap2',
   X402 = 'x402',
+  MPP = 'mpp',
   GOVERNANCE = 'governance',
   COMPLIANCE = 'compliance',
   ENTITY = 'entity',
   A2A = 'a2a',
   DISCOVERY = 'discovery',
+  COMPOSITION = 'composition',
 }
 
 /** Derive category from an OpType */
@@ -110,11 +128,13 @@ export function getCategoryFromOpType(opType: OpType): OpCategory {
     acp: OpCategory.ACP,
     ap2: OpCategory.AP2,
     x402: OpCategory.X402,
+    mpp: OpCategory.MPP,
     governance: OpCategory.GOVERNANCE,
     compliance: OpCategory.COMPLIANCE,
     entity: OpCategory.ENTITY,
     a2a: OpCategory.A2A,
     discovery: OpCategory.DISCOVERY,
+    composition: OpCategory.COMPOSITION,
   };
   return categoryMap[prefix] || OpCategory.SETTLEMENT;
 }
@@ -123,13 +143,14 @@ export function getCategoryFromOpType(opType: OpType): OpCategory {
 // Protocol — which protocol this operation belongs to
 // =============================================================================
 
-export type Protocol = 'ucp' | 'acp' | 'ap2' | 'x402' | 'a2a' | 'cctp' | 'internal' | null;
+export type Protocol = 'ucp' | 'acp' | 'ap2' | 'x402' | 'mpp' | 'a2a' | 'cctp' | 'internal' | null;
 
 export function getProtocolFromOpType(opType: OpType): Protocol {
   if (opType.startsWith('ucp.')) return 'ucp';
   if (opType.startsWith('acp.')) return 'acp';
   if (opType.startsWith('ap2.')) return 'ap2';
   if (opType.startsWith('x402.')) return 'x402';
+  if (opType.startsWith('mpp.')) return 'mpp';
   if (opType.startsWith('a2a.')) return 'a2a';
   if (opType === OpType.SETTLEMENT_CCTP_BRIDGE) return 'cctp';
   return null;

@@ -87,6 +87,32 @@ export function AllProtocolsOverview({ period }: AllProtocolsOverviewProps) {
         };
     })();
 
+    // Fetch MPP stats from analytics endpoint
+    const { data: mppAnalytics } = useQuery({
+        queryKey: ['mpp', 'analytics', period],
+        queryFn: async () => {
+            if (!api) return null;
+            try {
+                return await api.mpp.getAnalytics({ period });
+            } catch {
+                return null;
+            }
+        },
+        enabled: !!api,
+    });
+
+    const mppData = {
+        volume: mppAnalytics?.summary?.totalRevenue || 0,
+        transactions: mppAnalytics?.summary?.transactionCount || 0,
+        successRate: (() => {
+            const pbs = mppAnalytics?.paymentsByStatus;
+            if (!pbs) return 0;
+            const total = (pbs.completed || 0) + (pbs.pending || 0) + (pbs.failed || 0);
+            return total > 0 ? ((pbs.completed || 0) / total) * 100 : 0;
+        })(),
+        trend: 0,
+    };
+
     // Fetch UCP stats from checkout stats endpoint (FX-normalized USD volume)
     const { data: ucpStats } = useQuery({
         queryKey: ['ucp', 'checkouts-stats'],
@@ -107,7 +133,7 @@ export function AllProtocolsOverview({ period }: AllProtocolsOverviewProps) {
     };
 
     // Calculate totals with weighted average success rate
-    const allProtocols = [x402Data, ap2Data, acpData, ucpData];
+    const allProtocols = [x402Data, ap2Data, acpData, ucpData, mppData];
     const totalVolume = allProtocols.reduce((sum, p) => sum + (p?.volume || 0), 0);
     const totalTransactions = allProtocols.reduce((sum, p) => sum + (p?.transactions || 0), 0);
     const weightedSuccessSum = allProtocols.reduce((sum, p) => {
@@ -157,6 +183,15 @@ export function AllProtocolsOverview({ period }: AllProtocolsOverviewProps) {
             bgColor: 'bg-yellow-500/10',
             data: x402Data || { volume: 0, transactions: 0, successRate: 0, trend: 0 },
             href: '?protocol=x402',
+        },
+        {
+            id: 'mpp',
+            name: 'MPP Payments',
+            icon: DollarSign,
+            color: 'text-orange-500',
+            bgColor: 'bg-orange-500/10',
+            data: mppData || { volume: 0, transactions: 0, successRate: 0, trend: 0 },
+            href: '?protocol=mpp',
         },
     ];
 

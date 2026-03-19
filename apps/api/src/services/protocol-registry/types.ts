@@ -3,7 +3,7 @@
  * Epic 49, Story 49.1: Type definitions for protocol discovery
  */
 
-export type ProtocolId = 'x402' | 'ap2' | 'acp' | 'ucp';
+export type ProtocolId = 'x402' | 'ap2' | 'acp' | 'ucp' | 'mpp';
 
 export type ProtocolStatus = 'stable' | 'beta' | 'experimental' | 'deprecated';
 

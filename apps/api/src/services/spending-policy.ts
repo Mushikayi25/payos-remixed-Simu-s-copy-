@@ -41,13 +41,15 @@ export interface SpendingPolicy {
 }
 
 export interface PolicyContext {
-  protocol: 'x402' | 'ap2' | 'acp' | 'ucp';
+  protocol: 'x402' | 'ap2' | 'acp' | 'ucp' | 'mpp';
   vendor?: string;          // Domain or merchant identifier
   category?: string;        // Payment category
   endpointId?: string;      // x402 endpoint ID
   endpointPath?: string;    // x402 endpoint path
   merchantId?: string;      // ACP/UCP merchant
   mandateId?: string;       // AP2 mandate
+  mppServiceUrl?: string;   // MPP target service URL
+  mppSessionId?: string;    // MPP session ID (for streaming)
   metadata?: Record<string, unknown>;
 }
 

@@ -67,6 +67,28 @@ export type ACPMetadataInput = z.input<typeof acpMetadataSchema>;
 export type ACPMetadataOutput = z.output<typeof acpMetadataSchema>;
 
 // ============================================
+// MPP Schema
+// ============================================
+
+export const mppMetadataSchema = z.object({
+  protocol: z.literal('mpp'),
+  service_url: z.string().min(1),
+  payment_method: z.enum(['tempo', 'stripe', 'lightning', 'card', 'custom']),
+  protocol_intent: z.enum(['charge', 'session']).optional(),
+  intent: z.string().optional(),
+  session_id: z.string().optional(),
+  voucher_index: z.number().int().nonnegative().optional(),
+  receipt_id: z.string().optional(),
+  receipt_data: z.record(z.any()).optional(),
+  settlement_network: z.string().optional(),
+  settlement_tx_hash: z.string().optional(),
+  verified_at: z.string().datetime().optional(),
+});
+
+export type MppMetadataInput = z.input<typeof mppMetadataSchema>;
+export type MppMetadataOutput = z.output<typeof mppMetadataSchema>;
+
+// ============================================
 // Union Schema
 // ============================================
 
@@ -78,6 +100,7 @@ export const protocolMetadataSchema = z.discriminatedUnion('protocol', [
   x402MetadataSchema,
   ap2MetadataSchema,
   acpMetadataSchema,
+  mppMetadataSchema,
 ]).nullable();
 
 export type ProtocolMetadataInput = z.input<typeof protocolMetadataSchema>;
@@ -99,9 +122,9 @@ export type ProtocolMetadataOutput = z.output<typeof protocolMetadataSchema>;
  * });
  */
 export function validateProtocolMetadata(
-  protocol: 'x402' | 'ap2' | 'acp',
+  protocol: 'x402' | 'ap2' | 'acp' | 'mpp',
   data: unknown
-): X402MetadataOutput | AP2MetadataOutput | ACPMetadataOutput {
+): X402MetadataOutput | AP2MetadataOutput | ACPMetadataOutput | MppMetadataOutput {
   switch (protocol) {
     case 'x402':
       return x402MetadataSchema.parse(data);
@@ -109,6 +132,8 @@ export function validateProtocolMetadata(
       return ap2MetadataSchema.parse(data);
     case 'acp':
       return acpMetadataSchema.parse(data);
+    case 'mpp':
+      return mppMetadataSchema.parse(data);
   }
 }
 
@@ -124,9 +149,9 @@ export function validateProtocolMetadata(
  * }
  */
 export function safeValidateProtocolMetadata(
-  protocol: 'x402' | 'ap2' | 'acp',
+  protocol: 'x402' | 'ap2' | 'acp' | 'mpp',
   data: unknown
-): z.SafeParseReturnType<unknown, X402MetadataOutput | AP2MetadataOutput | ACPMetadataOutput> {
+): z.SafeParseReturnType<unknown, X402MetadataOutput | AP2MetadataOutput | ACPMetadataOutput | MppMetadataOutput> {
   switch (protocol) {
     case 'x402':
       return x402MetadataSchema.safeParse(data);
@@ -134,6 +159,8 @@ export function safeValidateProtocolMetadata(
       return ap2MetadataSchema.safeParse(data);
     case 'acp':
       return acpMetadataSchema.safeParse(data);
+    case 'mpp':
+      return mppMetadataSchema.safeParse(data);
   }
 }
 
@@ -160,4 +187,11 @@ export function createAP2Metadata(data: AP2MetadataInput): AP2MetadataOutput {
  */
 export function createACPMetadata(data: ACPMetadataInput): ACPMetadataOutput {
   return acpMetadataSchema.parse(data);
+}
+
+/**
+ * Create validated MPP metadata
+ */
+export function createMppMetadata(data: MppMetadataInput): MppMetadataOutput {
+  return mppMetadataSchema.parse(data);
 }
